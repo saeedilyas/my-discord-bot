@@ -1,0 +1,756 @@
+
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js" type="59227d878d2404bd003c210a-text/javascript"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous" type="59227d878d2404bd003c210a-text/javascript"></script>
+
+
+	<!-- Replaced with another cdn, jsdelivr does not work in Egypt or China
+	 	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+	-->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js" integrity="sha512-pax4MlgXjHEPfCwcJLQhigY7+N8rt6bVvWLFyUMuxShv170X53TRzGPmPkZmGBhk+jikR8WBM4yl7A9WMHHqvg==" crossorigin="anonymous" referrerpolicy="no-referrer" type="59227d878d2404bd003c210a-text/javascript"></script>
+	
+	<!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous"> -->
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css" integrity="sha512-GQGU0fMMi238uA+a/bdWJfpUGKUkBdgfFdgBm72SUQ6BeyWjoY/ton0tEjH+OSH9iP4Dfh+7HM0I9f5eR0L/4w==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+	<!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css"> -->
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css" integrity="sha512-Oy+sz5W86PK0ZIkawrG0iv7XwWhYecM3exvUtMKNJMekGFJtVAhibhRPTpmyTj8+lJCkmWfnpxKgT2OopquBHA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+	<link href="https://fonts.googleapis.com/css?family=Roboto|Montserrat:400,500,600,700,800,900|Open+Sans:400,700,800|Fira+Sans:400,600|Lato:400,500,600" rel="stylesheet">
+	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css" integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
+	<link rel="stylesheet" href="/assets/style.css?v=6.0.7">
+	<link href="/favicon.png" rel="icon" type="image/png">
+	<meta name="description" content="Los Santos Roleplay Cops and Robbers (Ls-rcr) is a San Andreas Multiplayer (SA-MP) Cops and Robbers server, with an active user base and a helpful administration team">
+
+	<!-- Vue JS dependency TODO: this is only needed for one page. either include it only there, or rewrite to react (preferred approach) -->
+	<!-- <script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script> -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.5.17/vue.js" integrity="sha512-gh+25Y0CTHtw1FSJ4gDKYDFlZ84oV0l1bY5v7xrIwep7M1aV+7JgUaTu55bMerCblbPUD22MKlStyUwO9lHq4w==" crossorigin="anonymous" referrerpolicy="no-referrer" type="59227d878d2404bd003c210a-text/javascript"></script>
+
+	<!-- VueSax Framework dependency -->
+	<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+	<link href="https://unpkg.com/browse/vuesax@3.8.74/dist/vuesax.css" rel="stylesheet">
+	<script src="https://unpkg.com/browse/vuesax@3.8.74/dist/vuesax.umd.min.js" type="59227d878d2404bd003c210a-text/javascript"></script>
+
+	<!-- Vue JS dependency -->
+	<script src="/include/js/vue-charts.js" type="59227d878d2404bd003c210a-text/javascript"></script>
+
+	<!-- Vue Good Table -->
+	<!-- <script src="https://cdn.jsdelivr.net/npm/vue-tables-2@1.4.70/dist/vue-tables-2.min.js"></script> -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/vue-tables-2/1.6.0/vue-tables-2.min.js" integrity="sha512-H9xsLIv6uSMNP+ZaqHQOiO+Cq0Q/h5tCwJsVNRn9Orqi4eTtcdlewMBZRTyU/RT2iMGiy9PTouMkTPudgMbAjg==" crossorigin="anonymous" referrerpolicy="no-referrer" type="59227d878d2404bd003c210a-text/javascript"></script>
+
+</head>
+
+<body data-theme="light">
+	
+				<div id='cookies_policy_holder'>
+					<div id='cookies_policy'>
+						<div class='card bg-light'>
+							<div class='container'>
+								<div class='card-body'>
+								<p class='card-text cookie'>
+										<i class="fas fa-cookie-bite"></i>
+										<span class='cookie-message'>We use cookies to ensure the best experience for you on our website. By using this website you accept our use of cookies.</span>
+										<a class='btn btn-sm btn-primary float-right' id='cookies_hide'>Ok</a>
+										<a class='btn btn-sm float-right' href='/privacy-policy#cookies'>Read more</a>
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+					<div id="header">
+		
+		<div id='main-menu'>
+		<div class='container'>
+			<div class='main_wrapper'>
+			<div id='logo'><a href='/' ><img src='/images/logo.png' width='95px' height='33px' alt='Los Santos Roleplay Cops and Robbers'></a></div>
+			<div class="mobile-bars"><i id="removeMyClass" class="fas fa-bars"></i></div>
+			<ul class='overflowmobile'><li class='  menu-item'><a href='/'>Home</a></li><li class='  menu-item'><a href='//ls-rcr.com/forum'>Forum</a></li>
+				<li class='  submenu menu-item'>
+					<a href='#' class='toggle'>Information <svg x="0px" y="0px" viewBox="0 0 14 8" xml:space="preserve" fill="none" class="icon-chevon-down-mktg position-relative"><path d="M1,1l6.2,6L13,1"></path></svg></a>
+					<ul class='mobilemenu'><li><a href='../../getting-started.php'>Beginners Tutorial</a></li><li><a href='../../rules/'>Server Rules</a></li><li><a href='../../privacy-policy'>Privacy Policy</a></li><li><a href='/map'>Server Map</a></li>
+					</ul>
+				</li>
+				<li class='  submenu menu-item'>
+					<a href='#' class='toggle'>Statistics <svg x="0px" y="0px" viewBox="0 0 14 8" xml:space="preserve" fill="none" class="icon-chevon-down-mktg position-relative"><path d="M1,1l6.2,6L13,1"></path></svg></a>
+					<ul class='mobilemenu'><li><a href='../top/'>Top 25</a></li><li><a href='../top/?p=activity'>Most Active</a></li><li><a href='../top/?p=server'>Server Stats</a></li><li><a href='../top/?p=score'>Top Score</a></li><li><a href='../top/?p=groups'>Groups</a></li><li><a href='../top/?p=turf'>Turf Stats</a></li>
+					</ul>
+				</li>
+				<li class='  submenu menu-item'>
+					<a href='#' class='toggle'>UCP <svg x="0px" y="0px" viewBox="0 0 14 8" xml:space="preserve" fill="none" class="icon-chevon-down-mktg position-relative"><path d="M1,1l6.2,6L13,1"></path></svg></a>
+					<ul class='mobilemenu'><li><a href='../../ucp/'>Dashboard</a></li><li><a href='../../ucp/?p=profile'>Profile</a></li><li><a href='../../ucp/?p=messaging'>Messaging</a></li><li><a href='../../ucp/?p=houses'>Houses</a></li><li><a href='../../ucp/?p=vehicles'>Vehicles</a></li><li><a href='../../ucp/?p=donation-items'>Donation Items</a></li><li><a href='../../ucp/?p=transfers'>Transfers</a></li><li><a href='../../ucp/?p=tag'>Tag Area</a></li><li><a href='../../ucp/?p=support'>Support</a></li><li><a href='../../ucp/?p=logs'>Logs</a></li>
+					</ul>
+				</li>
+				<li class='  submenu menu-item'>
+					<a href='#' class='toggle'>Shop <svg x="0px" y="0px" viewBox="0 0 14 8" xml:space="preserve" fill="none" class="icon-chevon-down-mktg position-relative"><path d="M1,1l6.2,6L13,1"></path></svg></a>
+					<ul class='mobilemenu'><li><a href='../../shop/'>Shop page</a></li><li><a href='../../shop/?p=items&category=1'>Donation items</a></li><li><a href='../../shop/?p=items&category=2'>Wearables</a></li><li><a href='../../shop/?p=items&category=3'>Memberships</a></li><li><a href='../../shop/?p=items&category=4'>Vehicle Addons</a></li><li><a href='../../../shop/?p=vehicles'>Vehicles</a></li><li><a href='../../shop/?p=houses'>Houses</a></li><li><a href='../../shop/?p=apartments'>Apartments</a></li><li><a href='../../shop/?p=groups'>Groups</a></li><li><a href='../../shop/?p=get-points'>Get Points</a></li>
+					</ul>
+				</li><li class='  menu-item'><a href='../../donate'>Donate</a></li><li class='menu-login-button  menu-item'><a href='/ucp/login.php'>Login</a></li>
+			</ul>
+		</div>
+		</div>	</div>
+	
+	<div id='notifications-manager-app'></div>
+	
+	
+<div class="container-white full-height">
+<div class="container">
+<h1>Army Manager<span class="dot">.</span></h1><div class="submenu-mobile-toggle"><p>Lsrcr Army</p> <i class="fas fa-bars"></i></div><div class='default-submenu'><ul id="submenu-toggle" class="nav nav-pills justify-content-center"><li class="nav-item"><a class="nav-link active" href='./'><span class='ucp_icon glyphicon fas fa-users fa-sm'></span> Memberlist</a></li></ul></div>
+<title>Ls-rcr - Army Memberlist</title>
+
+<br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">General <span class="float-right badge bg-primary">1</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">GEN</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Army 
+		</li>
+		
+		<li class="list-group-item">
+			Cover 
+		</li>
+		
+		<li class="list-group-item">
+			Faraon 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Brigadier General <span class="float-right badge bg-primary">2</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">BG</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Ackman 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Lieutenant Colonel <span class="float-right badge bg-primary">3</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">LTC</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Mahmoud 
+		</li>
+		
+		<li class="list-group-item">
+			Sumair 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Major <span class="float-right badge bg-primary">4</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">MAJ</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Bear 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Captain <span class="float-right badge bg-primary">5</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">CPT</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Ak3EL 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">First Lieutenant <span class="float-right badge bg-primary">6</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">1LT</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			saeedi 
+		</li>
+		
+		<li class="list-group-item">
+			Swaka 
+		</li>
+		
+		<li class="list-group-item">
+			Wanted 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Second Lieutenant <span class="float-right badge bg-primary">7</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">2LT</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Astrl 
+		</li>
+		
+		<li class="list-group-item">
+			DonY 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Sergeant Major <span class="float-right badge bg-primary">8</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">SGM</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Crimson 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">First Sergeant <span class="float-right badge bg-primary">9</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">FSG</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Checkmate 
+		</li>
+		
+		<li class="list-group-item">
+			Ritz 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Master Sergeant <span class="float-right badge bg-primary">10</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">MSG</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Berlin 
+		</li>
+		
+		<li class="list-group-item">
+			Dragon 
+		</li>
+		
+		<li class="list-group-item">
+			Shelby 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Sergeant First Class <span class="float-right badge bg-primary">11</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">SFC</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Abstract 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Staff Sergeant <span class="float-right badge bg-primary">12</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">SSG</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Alexo 
+		</li>
+		
+		<li class="list-group-item">
+			Cyrus 
+		</li>
+		
+		<li class="list-group-item">
+			Diesel 
+		</li>
+		
+		<li class="list-group-item">
+			eg_Fla$h 
+		</li>
+		
+		<li class="list-group-item">
+			Stormborn 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Sergeant <span class="float-right badge bg-primary">13</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">SGT</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			apapaoemama 
+		</li>
+		
+		<li class="list-group-item">
+			oxy 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Corporal <span class="float-right badge bg-primary">14</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">CPL</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Panzer 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Specialist <span class="float-right badge bg-primary">15</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">SPC</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Amir 
+		</li>
+		
+		<li class="list-group-item">
+			boyabunda 
+		</li>
+		
+		<li class="list-group-item">
+			MoJRem 
+		</li>
+		
+		<li class="list-group-item">
+			Reaction 
+		</li>
+		
+		<li class="list-group-item">
+			x7mas 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Private First Class <span class="float-right badge bg-primary">16</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">PFC</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Lolokiko 
+		</li>
+		
+		<li class="list-group-item">
+			Panadol 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Ex-General <span class="float-right badge bg-primary">17</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">EXG</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Alecz 
+		</li>
+		
+		<li class="list-group-item">
+			BeX 
+		</li>
+		
+		<li class="list-group-item">
+			Fatal 
+		</li>
+		
+		<li class="list-group-item">
+			Gangsta19 
+		</li>
+		
+		<li class="list-group-item">
+			JohnCarer 
+		</li>
+		
+		<li class="list-group-item">
+			Kamuran 
+		</li>
+		
+		<li class="list-group-item">
+			Kane 
+		</li>
+		
+		<li class="list-group-item">
+			Killdahobo 
+		</li>
+		
+		<li class="list-group-item">
+			Mateej 
+		</li>
+		
+		<li class="list-group-item">
+			Mockery 
+		</li>
+		
+		<li class="list-group-item">
+			Osolnik 
+		</li>
+		
+		<li class="list-group-item">
+			Robin 
+		</li>
+		
+		<li class="list-group-item">
+			Ryder 
+		</li>
+		
+		<li class="list-group-item">
+			Santiago 
+		</li>
+		
+		<li class="list-group-item">
+			ShaYaN 
+		</li>
+		
+		<li class="list-group-item">
+			Sinner 
+		</li>
+		
+		<li class="list-group-item">
+			Spoon 
+		</li>
+		
+		<li class="list-group-item">
+			Whiskey 
+		</li>
+		
+		<li class="list-group-item">
+			Yoennie 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Veteran <span class="float-right badge bg-primary">18</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">VTN</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			Absynth 
+		</li>
+		
+		<li class="list-group-item">
+			An44s 
+		</li>
+		
+		<li class="list-group-item">
+			CyClon3 
+		</li>
+		
+		<li class="list-group-item">
+			Cyrex 
+		</li>
+		
+		<li class="list-group-item">
+			Fantastic 
+		</li>
+		
+		<li class="list-group-item">
+			Gorm 
+		</li>
+		
+		<li class="list-group-item">
+			Immortal 
+		</li>
+		
+		<li class="list-group-item">
+			Jobin 
+		</li>
+		
+		<li class="list-group-item">
+			KKC 
+		</li>
+		
+		<li class="list-group-item">
+			Koopz 
+		</li>
+		
+		<li class="list-group-item">
+			MitkoBeadDz 
+		</li>
+		
+		<li class="list-group-item">
+			Phenomenal 
+		</li>
+		
+		<li class="list-group-item">
+			PiPo 
+		</li>
+		
+		<li class="list-group-item">
+			Realize 
+		</li>
+		
+		<li class="list-group-item">
+			Richano 
+		</li>
+		
+		<li class="list-group-item">
+			SpineL 
+		</li>
+		
+		<li class="list-group-item">
+			uncen 
+		</li>
+		
+		<li class="list-group-item">
+			VALDE 
+		</li>
+		
+		<li class="list-group-item">
+			VenoM 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title">Associate <span class="float-right badge bg-primary">19</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted">ASC</h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			andro_pineda 
+		</li>
+		
+		<li class="list-group-item">
+			artifact 
+		</li>
+		
+		<li class="list-group-item">
+			Cena 
+		</li>
+		
+		<li class="list-group-item">
+			CresP 
+		</li>
+		
+		<li class="list-group-item">
+			CXdur 
+		</li>
+		
+		<li class="list-group-item">
+			Danny 
+		</li>
+		
+		<li class="list-group-item">
+			Diplo 
+		</li>
+		
+		<li class="list-group-item">
+			Energ 
+		</li>
+		
+		<li class="list-group-item">
+			F1erce 
+		</li>
+		
+		<li class="list-group-item">
+			Freya 
+		</li>
+		
+		<li class="list-group-item">
+			GaNgStEr_TrIx 
+		</li>
+		
+		<li class="list-group-item">
+			Gladiator 
+		</li>
+		
+		<li class="list-group-item">
+			Grand 
+		</li>
+		
+		<li class="list-group-item">
+			Hayzen 
+		</li>
+		
+		<li class="list-group-item">
+			Hiresh 
+		</li>
+		
+		<li class="list-group-item">
+			J0JI 
+		</li>
+		
+		<li class="list-group-item">
+			Johnson 
+		</li>
+		
+		<li class="list-group-item">
+			Karthik 
+		</li>
+		
+		<li class="list-group-item">
+			Kissane 
+		</li>
+		
+		<li class="list-group-item">
+			Koko 
+		</li>
+		
+		<li class="list-group-item">
+			Kyou 
+		</li>
+		
+		<li class="list-group-item">
+			Mastro 
+		</li>
+		
+		<li class="list-group-item">
+			Tamer 
+		</li>
+		
+		<li class="list-group-item">
+			Veen 
+		</li>
+		
+		<li class="list-group-item">
+			Vic 
+		</li>
+		
+		<li class="list-group-item">
+			YassoVendetta 
+		</li>
+		</ul></div></div><br>
+			<div class="col-12 col-md-6 offset-md-3">
+			<div class="card card-spacing">
+				<div class="card-body">
+					<h5 class="card-title"> <span class="float-right badge bg-primary">20</span></h5>
+					<h6 class="card-subtitle mb-2 text-muted"></h6>
+				</div>
+					<ul class="list-group list-group-flush">
+		<li class="list-group-item">
+			SkillzzTestAcc 
+		</li>
+		</div></div>
+		
+				</div><!-- container -->
+	</div><!-- container-white -->
+
+	<div id="footer">
+			<div class="row">
+				<div class="col-sm-12 col-md-6">
+					<img src="//static.ls-rcr.com/media/logo.png" alt="Lsrcr"/>
+					<span class="lsrcr-name">Los Santos Roleplay Cops & Robbers</span>
+					Copyright &copy; Ls-rcr 2026. All Rights Reserved.
+				</div>
+				<div class="col-sm-12 col-md-2">
+					<b>Useful Links</b>
+					<li><a href="/rules/">Server Rules</a></li>
+					<li><a href="/support/">Support Area</a></li>
+					<li><a href="/getting-started.php">Getting Started</a></li>
+					<li><a href="/ucp/?p=tag">Tag Area</a></li>
+					<li><a href="/forum/">Forum</a></li>
+					<li><a href="https://discord.gg/ujAnywa">Discord</a></li>
+					<li><a href="ts3server://teamspeak.ls-rcr.com">Teamspeak</a></li>
+					<li><a href="samp://play.ls-rcr.com">SA-MP</a></li>
+				</div>
+				<div class="col-sm-12 col-md-2">
+					<b>Lsrcr</b>
+					<li><a href="/service-status">Service Status <span class="service-online"></span></a></li>
+					<li><a href="/privacy-policy">Privacy policy</a></li>
+					<li><a href="/donate">Donate</a></li>
+					<li><a href="/shop/">Shop</a></li>
+				</div>
+				<div class="col-sm-12 col-md-2">
+					<b>Social media</b>
+					<li><a href="https://www.youtube.com/channel/UC6CZLHL0XFy9Lq2Fdiw5VHw">YouTube</a></li>
+					<li><a href="https://www.facebook.com/lsrcr/">Facebook</a></li>
+					<li><a href="https://www.facebook.com/halfanerd/">Han Facebook</a></li>
+
+				</div>
+			</div>
+
+	</div>
+
+	<script src="/js/jquery.cookie.min.js" type="59227d878d2404bd003c210a-text/javascript"></script>
+<script src="//ajax.googleapis.com/ajax/libs/webfont/1.4.7/webfont.js" type="59227d878d2404bd003c210a-text/javascript"></script>
+<script src="/assets/style.entry.js" type="59227d878d2404bd003c210a-text/javascript"></script>
+<script type="59227d878d2404bd003c210a-text/javascript">
+	$("#cookies_hide").click(function()
+	{
+		$("#cookies_policy_holder").slideUp("slow");
+		$.cookie("l_cookies", "1", {
+			expires: 365,
+			domain:'ls-rcr.com',
+			path:'/',
+			secure: true		});
+	});
+
+	$(".submenu .toggle").click(function()
+	{
+		if($(this).next("ul").css("display") == "none")
+		{
+			$(".submenu .toggle").nextAll("ul").slideUp(250);
+			$(this).next("ul").slideDown(250)
+		}
+		else
+		{
+			$(this).next("ul").slideUp(250)
+		}
+		return false;
+	});
+
+	var sticky = false;
+	$(document).ready(function()
+	{
+		$(".mobile-bars").click(function()
+		{
+			$(".mobilemenu").hide();
+			if($("#removeMyClass").hasClass("fa-bars")) {
+				$("#removeMyClass").removeClass("fa-bars");
+				$("#removeMyClass").addClass("fa-times");
+			}
+			else {
+				$("#removeMyClass").addClass("fa-bars");
+				$("#removeMyClass").removeClass("fa-times");
+			}
+			$(".overflowmobile").slideToggle(400, function() {
+				if($(this).css("display") == "none")
+				{
+					$(this).css("display", "");
+				}
+			});
+		});
+
+		$(".submenu-mobile-toggle").click(function()
+		{
+			$("#submenu-toggle").slideToggle(400, function() {
+				if($(this).css("display") == "none")
+				{
+					$(this).css("display", "");
+				}
+			});
+		});
+	});
+</script>
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-84339929-1" type="59227d878d2404bd003c210a-text/javascript"></script>
+<script type="59227d878d2404bd003c210a-text/javascript">
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-84339929-1');
+</script>
+	<script src="/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="59227d878d2404bd003c210a-|49" defer></script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9ffbe93bac43e19c',t:'MTc3OTQ1Mzg1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

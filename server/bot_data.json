@@ -1,0 +1,207 @@
+{
+  "token": "",
+  "slashCommands": [],
+  "presence": {
+    "status": "dnd",
+    "activityType": "1",
+    "activityName": "Build -  v1.6.2"
+  },
+  "sampMonitor": {
+    "messageId": "1502473062191468594",
+    "channelId": "1460823311511720142",
+    "host": "play.ls-rcr.com",
+    "port": 7777
+  },
+  "auditLog": {
+    "channelId": "1456633547031973929"
+  },
+  "lastAnnouncedVersion": "1.6.11",
+  "suggestionSystem": {
+    "channelId": "1503145319171359011",
+    "rulesChannelId": "1502842217792798913",
+    "staffRoles": [
+      "1503148052209209414",
+      "1456634173321384007"
+    ]
+  },
+  "complaintSystem": {
+    "channelId": "1503497775214497852",
+    "categoryId": "1503498256099971092",
+    "staffRoles": [
+      "1503148052209209414",
+      "1456634173321384007"
+    ],
+    "nextId": 14,
+    "messageId": "1503500267444764793"
+  },
+  "caseSystem": {
+    "channelId": "1504960398091354252",
+    "logOpenChannelId": "1506173942287564810",
+    "logPurchaseChannelId": "1504990351826489394",
+    "staffRoles": [
+      "1503148052209209414",
+      "1456634173321384007"
+    ],
+    "inventories": {
+      "518679063062118402": {
+        "cash": 0,
+        "jcs": 0,
+        "dps": 0,
+        "cases": {
+          "classic": 0,
+          "golden": 2,
+          "diamond": 0
+        }
+      },
+      "1308687748219273239": {
+        "cash": 300000,
+        "jcs": 0,
+        "dps": 0,
+        "cases": {
+          "classic": 0,
+          "golden": 0,
+          "emerald": 0
+        }
+      },
+      "467195356363358210": {
+        "cash": 0,
+        "jcs": 0,
+        "dps": 0,
+        "cases": {
+          "classic": 0,
+          "golden": 0,
+          "emerald": 0
+        }
+      },
+      "770994232143118355": {
+        "cash": 0,
+        "jcs": 0,
+        "dps": 0,
+        "cases": {
+          "classic": 0,
+          "golden": 0,
+          "emerald": 2
+        }
+      }
+    }
+  },
+  "welcomeChannelId": "1318293692532002840",
+  "giveawaySystem": {
+    "channelId": "1503548380628914276",
+    "giveaways": [
+      {
+        "messageId": "1503550310142967888",
+        "channelId": "1503548380628914276",
+        "endTime": 1778548327323,
+        "winnersCount": 1,
+        "prize": "25 Jailcards",
+        "ended": true
+      },
+      {
+        "messageId": "1503665607789252738",
+        "channelId": "1503548380628914276",
+        "endTime": 1778579416213,
+        "winnersCount": 1,
+        "prize": "10 jcs",
+        "ended": true
+      },
+      {
+        "messageId": "1503666254408319098",
+        "channelId": "1503548380628914276",
+        "endTime": 1778572490396,
+        "winnersCount": 1,
+        "prize": "1 Donation Point",
+        "ended": true
+      },
+      {
+        "messageId": "1505758130968199269",
+        "channelId": "1503548380628914276",
+        "endTime": 1779074713671,
+        "winnersCount": 1,
+        "prize": "1 Dp",
+        "ended": true
+      },
+      {
+        "messageId": "1505762216106917908",
+        "channelId": "1503548380628914276",
+        "endTime": 1779075687410,
+        "winnersCount": 1,
+        "prize": "1 Dp",
+        "ended": true
+      },
+      {
+        "messageId": "1506274416143892590",
+        "channelId": "1503548380628914276",
+        "endTime": 1779194260805,
+        "winnersCount": 1,
+        "prize": "1",
+        "ended": true
+      },
+      {
+        "messageId": "1507214730669068380",
+        "channelId": "1503548380628914276",
+        "endTime": 1779420194107,
+        "winnersCount": 1,
+        "prize": "5 Jailcards",
+        "ended": true
+      },
+      {
+        "messageId": "1507215892495204364",
+        "channelId": "1503548380628914276",
+        "endTime": 1779420471105,
+        "winnersCount": 1,
+        "prize": "3 JCs",
+        "ended": true
+      },
+      {
+        "messageId": "1507216951351709706",
+        "channelId": "1503548380628914276",
+        "endTime": 1779419223511,
+        "winnersCount": 30,
+        "prize": "3 jcs",
+        "ended": true
+      },
+      {
+        "messageId": "1507351613327544441",
+        "channelId": "1503548380628914276",
+        "endTime": 1779459668567,
+        "winnersCount": 1,
+        "prize": "1 Donation Points",
+        "ended": true
+      },
+      {
+        "messageId": "1507352073941946509",
+        "channelId": "1503548380628914276",
+        "endTime": 1779452938395,
+        "winnersCount": 1,
+        "prize": "1 Jailcard",
+        "ended": true
+      },
+      {
+        "messageId": "1507352526830309378",
+        "channelId": "1503548380628914276",
+        "endTime": 1779453046357,
+        "winnersCount": 1,
+        "prize": "1 Jailcard",
+        "ended": true
+      },
+      {
+        "messageId": "1507353872069296128",
+        "channelId": "1503548380628914276",
+        "endTime": 1779453066766,
+        "winnersCount": 1,
+        "prize": "1",
+        "ended": true
+      },
+      {
+        "messageId": "1517672537738182747",
+        "channelId": "1503548380628914276",
+        "endTime": 1781911907775,
+        "winnersCount": 1,
+        "prize": "5 Jailcards",
+        "ended": true,
+        "hostId": "518679063062118402"
+      }
+    ]
+  }
+}

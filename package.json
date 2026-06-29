@@ -1,0 +1,27 @@
+{
+  "name": "discord-bot-dashboard",
+  "version": "1.0.0",
+  "scripts": {
+    "dev:server": "cd server && nodemon --ignore bot_data.json index.js",
+    "dev:client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "build": "cd client && npm install && npm run build",
+    "start": "node server/index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "axios": "^1.16.0",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "discord.js": "^14.26.4",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "gamedig": "^5.3.2",
+    "node-samp-query": "^1.0.0",
+    "nodemon": "^3.1.14",
+    "samp-query": "^0.1.5",
+    "socket.io": "^4.8.3"
+  }
+}
