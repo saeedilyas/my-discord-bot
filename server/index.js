@@ -380,6 +380,81 @@ const registerCommands = async (token, clientId, commands, client) => {
     }
 };
 
+const updateTurfStats = async (client) => {
+    const channelId = botData.turfSystem?.channelId || '1522182795278028860';
+    try {
+        const channel = await client.channels.fetch(channelId).catch(() => null);
+        if (!channel) return;
+
+        const axios = require('axios');
+        // Fetch from LS-RCR internal API based on frontend logic
+        const res = await axios.get('https://api.ls-rcr.com/internal/group/turf_stats/weekly/current', { timeout: 10000 });
+        let data = res.data;
+        if (!Array.isArray(data)) {
+            // Data might be wrapped, attempt to extract
+            data = data.data || [];
+        }
+
+        // Map data according to the frontend's mapping
+        let sortedGroups = data.map(e => ({
+            name: e.name || e.groupName || 'Unknown',
+            captures: e.turfStats?.captures || 0,
+            defenses: e.turfStats?.defenses || 0,
+            kills: e.turfStats?.kills || 0,
+        }));
+
+        // Sort using the frontend formula
+        sortedGroups.sort((a, b) => {
+            const scoreA = 3 * a.captures + 2 * a.defenses + 1 * a.kills;
+            const scoreB = 3 * b.captures + 2 * b.defenses + 1 * b.kills;
+            return scoreB - scoreA;
+        });
+
+        // Get Top 6
+        const topGroups = sortedGroups.slice(0, 6);
+
+        if (topGroups.length === 0) {
+            topGroups.push({ name: 'No Data', captures: 0, defenses: 0, kills: 0 });
+        }
+
+        const embed = new EmbedBuilder()
+            .setAuthor({ name: 'Hooligans Turf War — Top 6', iconURL: 'https://cdn.discordapp.com/emojis/1507349291243536414.png' })
+            .setColor('#111317')
+            .setThumbnail(client.user.displayAvatarURL());
+
+        const descriptionLines = [];
+        const medals = ['🏆', '🥈', '🥉', '<:4_:1522182795278028860>', '<:5_:1522182795278028861>', '<:6_:1522182795278028862>']; // Use standard emojis if custom ones fail
+        
+        topGroups.forEach((group, index) => {
+            const rankIcon = index < 3 ? medals[index] : `${index + 1}`; // fallback for 4, 5, 6
+            descriptionLines.push(`**${rankIcon} ${group.name}**`);
+            descriptionLines.push(`» Captures: ${group.captures} | 🛡️ Defenses: ${group.defenses} | ⚔️ Kills: ${group.kills}`);
+            descriptionLines.push(''); // empty line
+        });
+
+        embed.setDescription(descriptionLines.join('\n'));
+        embed.setFooter({ text: 'Turf Stats • Updates automatically • Prize resets in 7 days', iconURL: client.user.displayAvatarURL() });
+        embed.setTimestamp();
+
+        if (botData.turfSystem?.messageId) {
+            const msg = await channel.messages.fetch(botData.turfSystem.messageId).catch(() => null);
+            if (msg) {
+                await msg.edit({ embeds: [embed] });
+                return;
+            }
+        }
+
+        const newMsg = await channel.send({ embeds: [embed] });
+        if (!botData.turfSystem) botData.turfSystem = {};
+        botData.turfSystem.messageId = newMsg.id;
+        botData.turfSystem.channelId = channelId;
+        saveData();
+
+    } catch (e) {
+        console.error('Error updating turf stats:', e.message);
+    }
+};
+
 const updateSAMPStatus = async (client) => {
     const { host, port, channelId, messageId } = botData.sampMonitor;
     if (!channelId) return;
@@ -571,6 +646,10 @@ const createClient = (token) => {
             updateSAMPStatus(client);
             setInterval(() => updateSAMPStatus(client), 30000);
 
+            // Start Turf Stats Monitor
+            updateTurfStats(client);
+            setInterval(() => updateTurfStats(client), 60000);
+
             // Automatic Update Announcement
             if (botData.lastAnnouncedVersion !== CURRENT_VERSION) {
                 const updateChannel = await client.channels.fetch('1504995777716555797').catch(() => null);
@@ -584,7 +663,7 @@ const createClient = (token) => {
                         ].join('\n'))
                         .setColor('#5865F2')
                         .setThumbnail('https://cdn.discordapp.com/emojis/1507349291243536414.png')
-                        .setFooter({ text: 'The Lost Legends | Bot Updates', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
+                        .setFooter({ text: 'The Lost Legends | Bot Updates', iconURL: client.user.displayAvatarURL() });
                     
                     await updateChannel.send({ embeds: [updateEmbed] }).catch(console.error);
                     botData.lastAnnouncedVersion = CURRENT_VERSION;
@@ -592,11 +671,88 @@ const createClient = (token) => {
                 }
             }
 
+            // Update Suggestion prompt
+            if (botData.suggestionSystem?.channelId) {
+                try {
+                    const sugChannel = await client.channels.fetch(botData.suggestionSystem.channelId);
+                    if (sugChannel) {
+                        const messages = await sugChannel.messages.fetch({ limit: 50 });
+                        const promptMsg = messages.find(m => m.author.id === client.user.id && m.embeds[0] && m.embeds[0].title === '💡 Server Suggestions & Feedback');
+                        if (promptMsg) {
+                            const newEmbed = EmbedBuilder.from(promptMsg.embeds[0])
+                                .setDescription([
+                                    'We value your input! To help us maintain a high-quality environment, please follow these guidelines when submitting a suggestion:',
+                                    '',
+                                    '**Rules & Guidelines:**',
+                                    '1. Be clear and concise with your request.',
+                                    '2. Ensure your suggestion is realistic and beneficial for the community.',
+                                    '3. Check if your idea has already been suggested.',
+                                    '4. Avoid spamming or submitting offensive content.',
+                                    '',
+                                    '**How to suggest:**',
+                                    'When you type in this channel, it acts like a suggestion automatically! Once submitted, it will have an Accept/Deny button for staff and voting reactions for players.',
+                                    '',
+                                    '*Please note that all submissions are reviewed by our staff team within 24-48 hours.*'
+                                ].join('\n'));
+                            await promptMsg.edit({ embeds: [newEmbed], components: [] });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to update suggestion prompt', e);
+                }
+            }
+
             resolve(client);
         });
 
-        client.on('messageCreate', (message) => {
+        client.on('messageCreate', async (message) => {
             if (message.author.bot && message.author.id !== client.user.id) return;
+
+            // Suggestion System interception
+            if (message.channelId === botData.suggestionSystem.channelId && !message.author.bot) {
+                const text = message.content;
+                
+                await message.delete().catch(() => {});
+                
+                if (text.length < 10) {
+                    return message.author.send({ content: 'Your suggestion must be at least 10 characters long.' }).catch(() => {});
+                }
+
+                const embed = new EmbedBuilder()
+                    .setAuthor({ name: 'New Suggestion', iconURL: message.author.displayAvatarURL() })
+                    .setDescription([
+                        '**User:**',
+                        `<:dot:1502761998599979130> ${message.author} (${message.author.username})`,
+                        '',
+                        '**Suggestion:**',
+                        `<:dot:1502761998599979130> ${text}`,
+                        '',
+                        '**Votes:**',
+                        '<:dot:1502761998599979130> <:fup:1502758861751455945> **0** - -',
+                        '<:dot:1502761998599979130> <:fdown:1502758895561609247> **0** - -'
+                    ].join('\n'))
+                    .addFields({ name: 'Status', value: '🕒 Pending' })
+                    .setColor('#2B2D31')
+                    .setFooter({ text: 'Nexus', iconURL: message.client.user.displayAvatarURL() })
+                    .setTimestamp();
+
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('accept_suggestion').setLabel('Accept').setStyle(ButtonStyle.Success).setEmoji('1503512920250650745'),
+                    new ButtonBuilder().setCustomId('deny_suggestion').setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('1507464614797901904')
+                );
+
+                const msg = await message.channel.send({ content: botData.suggestionSystem.staffRoles.map(id => `<@&${id}>`).join(' '), embeds: [embed], components: [row] });
+                
+                await msg.react('1502758861751455945');
+                await msg.react('1502758895561609247');
+
+                const dmEmbed = new EmbedBuilder()
+                    .setAuthor({ name: 'Submitted Suggestion', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' })
+                    .setDescription('*your suggestion was recorded.*')
+                    .setColor('#808080');
+                await message.author.send({ embeds: [dmEmbed] }).catch(() => {});
+                return;
+            }
 
             // Prefix Commands
             const prefix = '?';
@@ -856,17 +1012,16 @@ const createClient = (token) => {
                             '3. Check if your idea has already been suggested.',
                             '4. Avoid spamming or submitting offensive content.',
                             '',
+                            '**How to suggest:**',
+                            'When you type in this channel, it acts like a suggestion automatically! Once submitted, it will have an Accept/Deny button for staff and voting reactions for players.',
+                            '',
                             '*Please note that all submissions are reviewed by our staff team within 24-48 hours.*'
                         ].join('\n'))
                         .setColor('#5865F2')
                         .setThumbnail(interaction.client.user.displayAvatarURL())
                         .setFooter({ text: 'Your feedback helps us grow!', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
 
-                    const row = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder().setCustomId('open_suggestion_modal').setLabel('Submit Suggestion').setStyle(ButtonStyle.Primary).setEmoji('💡')
-                    );
-
-                    await channel.send({ embeds: [embed], components: [row] });
+                    await channel.send({ embeds: [embed] });
                     await interaction.reply({ content: `Suggestion prompt sent to <#${channelId}>!`, ephemeral: true });
                     return;
                 }
