@@ -388,7 +388,7 @@ const updateTurfStats = async (client) => {
 
         const axios = require('axios');
         // Fetch from LS-RCR internal API based on frontend logic
-        const res = await axios.get('https://api.ls-rcr.com/internal/group/turf_stats/weekly/current', { timeout: 10000 });
+        const res = await axios.get('https://acp-api.ls-rcr.com/api/group/turf_stats/weekly/current', { timeout: 10000 });
         let data = res.data;
         if (!Array.isArray(data)) {
             // Data might be wrapped, attempt to extract
@@ -747,9 +747,11 @@ const createClient = (token) => {
                 await msg.react('1502758895561609247');
 
                 const dmEmbed = new EmbedBuilder()
-                    .setAuthor({ name: 'Submitted Suggestion', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' })
-                    .setDescription('*your suggestion was recorded.*')
-                    .setColor('#808080');
+                    .setAuthor({ name: 'Suggestion Submitted', iconURL: message.author.displayAvatarURL() })
+                    .setDescription('<:fcheck:1503512920250650745> **Suggestion Submitted**\n<:dot:1502761998599979130> *Your suggestion has been submitted*')
+                    .setColor('#808080')
+                    .setFooter({ text: 'Status: Pending' })
+                    .setTimestamp();
                 await message.author.send({ embeds: [dmEmbed] }).catch(() => {});
                 return;
             }
