@@ -1,5 +1,5 @@
 {
-  "token": "",
+  "token": "MTMwODY4Nzc0ODIxOTI3MzIzOQ.GpX23v.M3UTlKP7njaYLMfpuvvyYy6-06VEEBGnV8AL7s",
   "slashCommands": [],
   "presence": {
     "status": "dnd",
@@ -44,23 +44,90 @@
     ],
     "inventories": {
       "518679063062118402": {
-        "cash": 0,
-        "jcs": 0,
-        "dps": 0,
-        "cases": {
-          "classic": 0,
-          "golden": 2,
-          "diamond": 0
-        }
-      },
-      "1308687748219273239": {
-        "cash": 300000,
+        "cash": 101100,
         "jcs": 0,
         "dps": 0,
         "cases": {
           "classic": 0,
           "golden": 0,
+          "diamond": 0,
+          "emerald": null
+        },
+        "stats": {
+          "blackjack": {
+            "gambled": 124000,
+            "won": 172000,
+            "played": 8
+          },
+          "crash": {
+            "gambled": 0,
+            "won": 0,
+            "played": 0
+          },
+          "casesOpened": {
+            "classic": 0,
+            "golden": 2,
+            "emerald": 2,
+            "total": 4
+          },
+          "mines": {
+            "gambled": 78000,
+            "won": 29497,
+            "played": 6
+          },
+          "hilo": {
+            "gambled": 27000,
+            "won": 0,
+            "played": 2
+          },
+          "wheel": {
+            "gambled": 58000,
+            "won": 58000,
+            "played": 3
+          },
+          "plinko": {
+            "gambled": 13500,
+            "won": 4050,
+            "played": 1
+          }
+        }
+      },
+      "1308687748219273239": {
+        "cash": 10000,
+        "jcs": 0,
+        "dps": 0,
+        "cases": {
+          "classic": 1,
+          "golden": 0,
           "emerald": 0
+        },
+        "stats": {
+          "blackjack": {
+            "gambled": 0,
+            "won": 0,
+            "played": 0
+          },
+          "crash": {
+            "gambled": 0,
+            "won": 0,
+            "played": 0
+          },
+          "mines": {
+            "gambled": 0,
+            "won": 0,
+            "played": 0
+          },
+          "hilo": {
+            "gambled": 0,
+            "won": 0,
+            "played": 0
+          },
+          "casesOpened": {
+            "classic": 0,
+            "golden": 0,
+            "emerald": 0,
+            "total": 0
+          }
         }
       },
       "467195356363358210": {
@@ -84,6 +151,16 @@
         }
       }
     }
+  },
+  "recentlyAcceptedSystem": {
+    "channelId": "1525804799595905024",
+    "messageId": null,
+    "droppedTags": [
+      "StiCkE.",
+      "Crusheer",
+      "HighNasty",
+      "Vanguard"
+    ]
   },
   "welcomeChannelId": "1318293692532002840",
   "giveawaySystem": {
@@ -203,5 +280,9 @@
         "hostId": "518679063062118402"
       }
     ]
+  },
+  "turfSystem": {
+    "channelId": "1522182795278028860",
+    "messageId": "1522341016299110431"
   }
 }

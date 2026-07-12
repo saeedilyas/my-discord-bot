@@ -638,6 +638,7 @@ function getTurfResetTime() {
 }
 
 const updateTurfStats = async (client) => {
+    if (!client.isReady()) return;
     const channelId = botData.turfSystem?.channelId || '1522182795278028860';
     console.log('[TurfStats] Attempting to update turf stats for channel:', channelId);
     try {
@@ -652,7 +653,10 @@ const updateTurfStats = async (client) => {
 
         const axios = require('axios');
         // Fetch from LS-RCR internal API based on frontend logic
-        const res = await axios.get('https://acp-api.ls-rcr.com/api/group/turf_stats/weekly/current', { timeout: 10000 });
+        const res = await axios.get('https://acp-api.ls-rcr.com/api/group/turf_stats/weekly/current', { 
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            timeout: 10000 
+        });
         let data = res.data;
         if (!Array.isArray(data)) {
             // Data might be wrapped, attempt to extract
@@ -735,6 +739,7 @@ const updateTurfStats = async (client) => {
 };
 
 const updateRecentlyAccepted = async (client) => {
+    if (!client.isReady()) return;
     try {
         const fs = require('fs');
         const axios = require('axios');
@@ -803,6 +808,7 @@ const updateRecentlyAccepted = async (client) => {
 };
 
 const updateSAMPStatus = async (client) => {
+    if (!client.isReady()) return;
     const { host, port, channelId, messageId } = botData.sampMonitor;
     if (!channelId) return;
 
@@ -822,7 +828,7 @@ const updateSAMPStatus = async (client) => {
         }
 
         const API_URL = `http://sam.markski.ar/api/GetServerByIP?ip_addr=${targetIp}:${port}`;
-        const res = await axios.get(API_URL);
+        const res = await axios.get(API_URL, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
         const data = res.data;
 
         const channel = await client.channels.fetch(channelId);
@@ -839,7 +845,10 @@ const updateSAMPStatus = async (client) => {
 
             try {
                 // Use the verified SAMonitor IP for player data
-                const playersRes = await axios.get(`http://sam.markski.ar/api/GetServerPlayers?ip_addr=37.187.77.206:7777`, { timeout: 8000 });
+                const playersRes = await axios.get(`http://sam.markski.ar/api/GetServerPlayers?ip_addr=37.187.77.206:7777`, { 
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                    timeout: 8000 
+                });
                 if (playersRes.data && Array.isArray(playersRes.data)) {
                     displayPlayers = playersRes.data.length;
                     const sortedPlayers = playersRes.data.sort((a, b) => b.score - a.score);
