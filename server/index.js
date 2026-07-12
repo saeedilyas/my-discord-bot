@@ -27,9 +27,14 @@ const { Server } = require('socket.io');
 require('dotenv').config();
 const query = require('samp-query');
 
-const CURRENT_VERSION = '1.6.11';
+const CURRENT_VERSION = '1.6.12';
 const UPDATE_LOGS = [
-    'Adjusted update title text size and capitalization for a cleaner look.'
+    '**Added:** `/givecash` administrative command for easier economy management.',
+    '**Added:** "instant-purchase" logic for seamless case opening without having cases in inventory.',
+    '**Added:** Centralized audit channel for logging public case openings.',
+    '**Fixed & Changed:** Upgraded the UI for all administrative commands, user responses, and error messages to use blockquotes.',
+    '**Fixed & Changed:** Changed all shop and inventory interactions to be strictly ephemeral (only visible to you).',
+    '**Fixed & Changed:** Restricted administrative commands so they can only be used in designated admin channels.'
 ];
 
 // Global Error Handlers
@@ -789,7 +794,11 @@ const updateRecentlyAccepted = async (client) => {
         }
 
     } catch (e) {
-        console.error('Error fetching recently accepted:', e.message);
+        console.error('Error fetching recently accepted on Railway/Local:', e.message);
+        if (e.response) {
+            console.error('Status Code:', e.response.status);
+            console.error('Response Headers:', e.response.headers);
+        }
     }
 };
 
