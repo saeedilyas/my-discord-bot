@@ -96,6 +96,11 @@ let botData = {
         logPurchaseChannelId: '1504990351826489394',
         staffRoles: ['1503148052209209414', '1456634173321384007'],
         inventories: {} // userId -> { cash: 0, jcs: 0, dps: 0, cases: { classic: 0, golden: 0, emerald: 0 } }
+    },
+    recentlyAcceptedSystem: {
+        channelId: '1525804799595905024',
+        messageId: null,
+        droppedTags: []
     }
 };
 
@@ -130,7 +135,7 @@ const CASE_CONFIG = {
         name: 'Emerald Case',
         cost: 2,
         currency: 'dps',
-        emoji: '<:femerald:1507462059325915188>',
+        emoji: '<:femeraldcase:1525845628586954793>',
         image: 'https://i.ibb.co/8L8Ct9T9/image-2026-06-20-044215410.png', // Provided by user
         rewards: {
             basic: { name: 'Nothing', value: 0, odds: 64.75 },
@@ -187,12 +192,80 @@ const BUILTIN_COMMANDS = [
         description: "Displays a list of all available bot commands"
     },
     {
+        name: 'blackjack',
+        description: "Play a game of blackjack with your bot cash",
+        options: [
+            {
+                name: 'bet',
+                type: 4, // INTEGER
+                description: 'The amount of cash to bet',
+                required: true,
+                min_value: 10000
+            }
+        ]
+    },
+    {
+        name: 'crash',
+        description: "Play a game of crash with your bot cash",
+        options: [
+            {
+                name: 'bet',
+                type: 4, // INTEGER
+                description: 'The amount of cash to bet',
+                required: true,
+                min_value: 10000
+            }
+        ]
+    },
+    {
+        name: 'mines',
+        description: "Play a game of Mines with your bot cash",
+        options: [
+            {
+                name: 'bet',
+                type: 4, // INTEGER
+                description: 'The amount of cash to bet',
+                required: true,
+                min_value: 10000
+            },
+            {
+                name: 'bombs',
+                type: 4, // INTEGER
+                description: 'Number of bombs (1-19, default 3)',
+                required: false,
+                min_value: 1,
+                max_value: 19
+            }
+        ]
+    },
+    {
+        name: 'hilo',
+        description: "Play a game of Higher or Lower",
+        options: [
+            {
+                name: 'bet',
+                type: 4, // INTEGER
+                description: 'The amount of cash to bet',
+                required: true,
+                min_value: 10000
+            }
+        ]
+    },
+    {
+        name: 'cstats',
+        description: "View your casino and gambling statistics"
+    },
+    {
         name: 'setup-suggestions',
         description: "Sends the initial suggestion prompt to the configured channel"
     },
     {
         name: 'setup-rules',
         description: "Sends the server rules embed to the configured channel"
+    },
+    {
+        name: 'setup-update',
+        description: "Sends the Casino V2 Update log embed to the current channel"
     },
     {
         name: 'setup-complaints',
@@ -273,6 +346,14 @@ const BUILTIN_COMMANDS = [
         ]
     },
     {
+        name: 'givecash',
+        description: "Admin: Give cash to a user",
+        options: [
+            { name: 'user', type: 6, description: 'The user', required: true },
+            { name: 'amount', type: 4, description: 'Amount to give', required: true }
+        ]
+    },
+    {
         name: 'clear',
         description: "Clear a specific number of messages from the channel",
         options: [
@@ -291,8 +372,135 @@ const BUILTIN_COMMANDS = [
     {
         name: 'setup-groups',
         description: "Sends the interactive LS-RCR Groups viewer"
+    },
+    {
+        name: 'setup-shop',
+        description: "Sends the player shop embed with bid/order buttons"
     }
 ];
+
+// Casino Games State
+const activeBlackjackGames = new Map();
+const activeCrashGames = new Map();
+const activeMinesGames = new Map();
+const activeHiloGames = new Map();
+
+const bjSuits = ['♠', '♥', '♦', '♣'];
+const bjRanks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+
+function createDeck() {
+    let deck = [];
+    for (let suit of bjSuits) {
+        for (let rank of bjRanks) {
+            deck.push({ suit, rank });
+        }
+    }
+    return deck.sort(() => Math.random() - 0.5);
+}
+
+function calculateHand(hand) {
+    let value = 0;
+    let aces = 0;
+    for (let card of hand) {
+        if (card.rank === 'A') {
+            aces += 1;
+            value += 11;
+        } else if (['K', 'Q', 'J'].includes(card.rank)) {
+            value += 10;
+        } else {
+            value += parseInt(card.rank);
+        }
+    }
+    while (value > 21 && aces > 0) {
+        value -= 10;
+        aces -= 1;
+    }
+    return value;
+}
+
+function formatHand(hand, hideFirst = false) {
+    if (hideFirst) {
+        return `[ ? ] ` + hand.slice(1).map(c => `[${c.rank}${c.suit}]`).join(' ');
+    }
+    return hand.map(c => `[${c.rank}${c.suit}]`).join(' ');
+}
+
+function getMinesMultiplier(bombs, picks, total = 20) {
+    if (picks === 0) return 1.0;
+    let prob = 1.0;
+    for (let i = 0; i < picks; i++) {
+        prob *= (total - bombs - i) / (total - i);
+    }
+    return prob === 0 ? 0 : 0.95 / prob;
+}
+
+function generateMinesGrid(game, disabled = false, explodedIndex = -1) {
+    const rows = [];
+    for (let r = 0; r < 4; r++) {
+        const row = new ActionRowBuilder();
+        for (let c = 0; c < 5; c++) {
+            const idx = r * 5 + c;
+            const btn = new ButtonBuilder().setCustomId(`mine_${idx}`);
+            if (game.revealed[idx]) {
+                if (game.grid[idx]) {
+                    btn.setStyle(ButtonStyle.Danger).setEmoji('💣').setDisabled(true);
+                } else {
+                    btn.setStyle(ButtonStyle.Success).setEmoji('💎').setDisabled(true);
+                }
+            } else {
+                if (disabled) {
+                    if (game.grid[idx]) {
+                        btn.setStyle(explodedIndex === idx ? ButtonStyle.Danger : ButtonStyle.Secondary)
+                            .setEmoji(explodedIndex === idx ? '💥' : '💣')
+                            .setDisabled(true);
+                    } else {
+                        btn.setStyle(ButtonStyle.Secondary).setEmoji('🔲').setDisabled(true);
+                    }
+                } else {
+                    btn.setStyle(ButtonStyle.Secondary).setEmoji('🔲');
+                }
+            }
+            row.addComponents(btn);
+        }
+        rows.push(row);
+    }
+
+    // 5th row for cashout
+    if (!disabled) {
+        const cashoutRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('mine_cashout')
+                .setLabel(`Cash Out (${game.multiplier.toFixed(2)}x)`)
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(game.picks === 0)
+        );
+        rows.push(cashoutRow);
+    }
+    return rows;
+}
+
+function getCardImageUrl(card) {
+    let rank = card.rank;
+    if (rank === '10') rank = '0';
+    const suit = card.suit === '♠' ? 'S' : card.suit === '♥' ? 'H' : card.suit === '♦' ? 'D' : 'C';
+    return `https://deckofcardsapi.com/static/img/${rank}${suit}.png`;
+}
+
+function getCardValue(card) {
+    if (card.rank === 'A') return 14;
+    if (card.rank === 'K') return 13;
+    if (card.rank === 'Q') return 12;
+    if (card.rank === 'J') return 11;
+    return parseInt(card.rank);
+}
+
+function getHiloMultiplier(cardValue, guess) {
+    let prob = 0;
+    if (guess === 'higher') prob = (14 - cardValue) / 13;
+    if (guess === 'lower') prob = (cardValue - 2) / 13;
+    if (prob <= 0) return 0;
+    return 0.95 / prob;
+}
 
 const getInventory = (userId) => {
     if (!botData.caseSystem.inventories[userId]) {
@@ -302,7 +510,27 @@ const getInventory = (userId) => {
             dps: 0,
             cases: { classic: 0, golden: 0, emerald: 0 }
         };
+    } else if (botData.caseSystem.inventories[userId].cases && botData.caseSystem.inventories[userId].cases.emerald === undefined) {
+        botData.caseSystem.inventories[userId].cases.emerald = 0;
     }
+
+    if (!botData.caseSystem.inventories[userId].stats) {
+        botData.caseSystem.inventories[userId].stats = {
+            blackjack: { gambled: 0, won: 0, played: 0 },
+            crash: { gambled: 0, won: 0, played: 0 },
+            mines: { gambled: 0, won: 0, played: 0 },
+            hilo: { gambled: 0, won: 0, played: 0 },
+            casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 }
+        };
+    } else {
+        if (!botData.caseSystem.inventories[userId].stats.mines) {
+            botData.caseSystem.inventories[userId].stats.mines = { gambled: 0, won: 0, played: 0 };
+        }
+        if (!botData.caseSystem.inventories[userId].stats.hilo) {
+            botData.caseSystem.inventories[userId].stats.hilo = { gambled: 0, won: 0, played: 0 };
+        }
+    }
+
     return botData.caseSystem.inventories[userId];
 };
 
@@ -380,11 +608,42 @@ const registerCommands = async (token, clientId, commands, client) => {
     }
 };
 
+function getTurfResetTime() {
+    const now = new Date();
+    let d = new Date();
+    d.setUTCHours(23, 59, 59, 999);
+    let day = d.getUTCDay();
+    let diff = (7 - day) % 7;
+    d.setUTCDate(d.getUTCDate() + diff);
+
+    let timeDiff = d.getTime() - now.getTime();
+    if (timeDiff <= 0) {
+        d.setUTCDate(d.getUTCDate() + 7);
+        timeDiff = d.getTime() - now.getTime();
+    }
+
+    let days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+    let hours = Math.floor((timeDiff / (1000 * 60 * 60)) % 24);
+
+    let parts = [];
+    if (days > 0) parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+    if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+
+    return parts.length > 0 ? parts.join(' and ') : '< 1 hour';
+}
+
 const updateTurfStats = async (client) => {
     const channelId = botData.turfSystem?.channelId || '1522182795278028860';
+    console.log('[TurfStats] Attempting to update turf stats for channel:', channelId);
     try {
-        const channel = await client.channels.fetch(channelId).catch(() => null);
-        if (!channel) return;
+        const channel = await client.channels.fetch(channelId).catch((e) => {
+            console.error('[TurfStats] Failed to fetch channel:', e.message);
+            return null;
+        });
+        if (!channel) {
+            console.log('[TurfStats] Channel not found. Aborting.');
+            return;
+        }
 
         const axios = require('axios');
         // Fetch from LS-RCR internal API based on frontend logic
@@ -418,13 +677,13 @@ const updateTurfStats = async (client) => {
         }
 
         const embed = new EmbedBuilder()
-            .setAuthor({ name: 'Hooligans Turf War — Top 6', iconURL: 'https://cdn.discordapp.com/emojis/1507349291243536414.png' })
+            .setAuthor({ name: 'Ls-rcr Turf War Statistics', iconURL: 'https://cdn.discordapp.com/emojis/1507349291243536414.png' })
             .setColor('#111317')
             .setThumbnail(client.user.displayAvatarURL());
 
         const descriptionLines = [];
         const medals = ['🏆', '🥈', '🥉', '<:4_:1522182795278028860>', '<:5_:1522182795278028861>', '<:6_:1522182795278028862>']; // Use standard emojis if custom ones fail
-        
+
         topGroups.forEach((group, index) => {
             const rankIcon = index < 3 ? medals[index] : `${index + 1}`; // fallback for 4, 5, 6
             descriptionLines.push(`**${rankIcon} ${group.name}**`);
@@ -433,8 +692,23 @@ const updateTurfStats = async (client) => {
         });
 
         embed.setDescription(descriptionLines.join('\n'));
-        embed.setFooter({ text: 'Turf Stats • Updates automatically • Prize resets in 7 days', iconURL: client.user.displayAvatarURL() });
+        embed.setFooter({ text: `Turf Stats • Updates automatically • Prize resets in ${getTurfResetTime()}`, iconURL: client.user.displayAvatarURL() });
         embed.setTimestamp();
+
+        // Auto-recover message ID if it was lost from bot_data.json
+        if (!botData.turfSystem?.messageId) {
+            const recentMessages = await channel.messages.fetch({ limit: 20 }).catch(() => null);
+            if (recentMessages) {
+                const existing = recentMessages.find(m => m.author.id === client.user.id && m.embeds[0]?.author?.name?.includes('Turf War'));
+                if (existing) {
+                    if (!botData.turfSystem) botData.turfSystem = {};
+                    botData.turfSystem.messageId = existing.id;
+                    botData.turfSystem.channelId = channelId;
+                    saveData();
+                    console.log('[TurfStats] Recovered lost message ID:', existing.id);
+                }
+            }
+        }
 
         if (botData.turfSystem?.messageId) {
             const msg = await channel.messages.fetch(botData.turfSystem.messageId).catch(() => null);
@@ -452,6 +726,70 @@ const updateTurfStats = async (client) => {
 
     } catch (e) {
         console.error('Error updating turf stats:', e.message);
+    }
+};
+
+const updateRecentlyAccepted = async (client) => {
+    try {
+        const fs = require('fs');
+        const axios = require('axios');
+        const cheerio = require('cheerio');
+
+        let data = { recentlyAcceptedSystem: { channelId: '1525804799595905024', messageId: null, droppedTags: [] } };
+        try {
+            data = JSON.parse(fs.readFileSync('./bot_data.json', 'utf8'));
+        } catch (e) { }
+
+        if (!data.recentlyAcceptedSystem) {
+            data.recentlyAcceptedSystem = { channelId: '1525804799595905024', messageId: null, droppedTags: [] };
+        }
+
+        const sys = data.recentlyAcceptedSystem;
+        const channel = await client.channels.fetch(sys.channelId).catch(() => null);
+        if (!channel) return;
+
+        const res = await axios.get('https://ls-rcr.com/community/?p=recently_accepted', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
+        const $ = cheerio.load(res.data);
+        const players = [];
+        $('table tr').each((i, row) => {
+            if (i === 0) return; // skip header
+            const cols = $(row).find('td');
+            if (cols.length >= 2) {
+                players.push({
+                    name: $(cols[0]).text().trim(),
+                    tag: $(cols[1]).text().trim(),
+                    date: $(cols[2]).text().trim()
+                });
+            }
+        });
+
+        const activePlayers = players; // Removed the flawed tag drop detection because name changes break it.
+
+        const listText = activePlayers.map(p => `<:dot:1502761998599979130> **${p.name}** - *${p.date}*`).join('\n');
+        const mainEmbed = new EmbedBuilder()
+            .setTitle('## Recent Lsrcr tagged Members')
+            .setDescription(listText || '*No recent members found.*')
+            .setColor('#2B2D31')
+            .setFooter({ text: 'Nexus', iconURL: client.user.displayAvatarURL() })
+            .setTimestamp();
+
+        if (sys.messageId) {
+            const msg = await channel.messages.fetch(sys.messageId).catch(() => null);
+            if (msg) {
+                await msg.edit({ embeds: [mainEmbed] });
+            } else {
+                const newMsg = await channel.send({ embeds: [mainEmbed] });
+                sys.messageId = newMsg.id;
+                fs.writeFileSync('./bot_data.json', JSON.stringify(data, null, 2));
+            }
+        } else {
+            const newMsg = await channel.send({ embeds: [mainEmbed] });
+            sys.messageId = newMsg.id;
+            fs.writeFileSync('./bot_data.json', JSON.stringify(data, null, 2));
+        }
+
+    } catch (e) {
+        console.error('Error fetching recently accepted:', e.message);
     }
 };
 
@@ -650,6 +988,10 @@ const createClient = (token) => {
             updateTurfStats(client);
             setInterval(() => updateTurfStats(client), 60000);
 
+            // Start Recently Accepted Monitor
+            updateRecentlyAccepted(client);
+            setInterval(() => updateRecentlyAccepted(client), 3600000);
+
             // Automatic Update Announcement
             if (botData.lastAnnouncedVersion !== CURRENT_VERSION) {
                 const updateChannel = await client.channels.fetch('1504995777716555797').catch(() => null);
@@ -664,7 +1006,7 @@ const createClient = (token) => {
                         .setColor('#5865F2')
                         .setThumbnail('https://cdn.discordapp.com/emojis/1507349291243536414.png')
                         .setFooter({ text: 'The Lost Legends | Bot Updates', iconURL: client.user.displayAvatarURL() });
-                    
+
                     await updateChannel.send({ embeds: [updateEmbed] }).catch(console.error);
                     botData.lastAnnouncedVersion = CURRENT_VERSION;
                     saveData();
@@ -711,11 +1053,11 @@ const createClient = (token) => {
             // Suggestion System interception
             if (message.channelId === botData.suggestionSystem.channelId && !message.author.bot) {
                 const text = message.content;
-                
-                await message.delete().catch(() => {});
-                
+
+                await message.delete().catch(() => { });
+
                 if (text.length < 10) {
-                    return message.author.send({ content: 'Your suggestion must be at least 10 characters long.' }).catch(() => {});
+                    return message.author.send({ content: 'Your suggestion must be at least 10 characters long.' }).catch(() => { });
                 }
 
                 const embed = new EmbedBuilder()
@@ -741,18 +1083,18 @@ const createClient = (token) => {
                     new ButtonBuilder().setCustomId('deny_suggestion').setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('1507464614797901904')
                 );
 
-                const msg = await message.channel.send({ content: botData.suggestionSystem.staffRoles.map(id => `<@&${id}>`).join(' '), embeds: [embed], components: [row] });
-                
+                const msg = await message.channel.send({ embeds: [embed], components: [row] });
+
                 await msg.react('1502758861751455945');
                 await msg.react('1502758895561609247');
 
                 const dmEmbed = new EmbedBuilder()
-                    .setAuthor({ name: 'Suggestion Submitted', iconURL: message.author.displayAvatarURL() })
-                    .setDescription('<:fcheck:1503512920250650745> **Suggestion Submitted**\n<:dot:1502761998599979130> *Your suggestion has been submitted*')
-                    .setColor('#808080')
+                    .setAuthor({ name: 'Suggestion Submitted', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' })
+                    .setDescription(`> <:dot:1502761998599979130> *Your suggestion has been submitted*\n<:dot:1502761998599979130> **ID:** [${msg.id}](https://discord.com/channels/${msg.guildId}/${msg.channelId}/${msg.id})`)
+                    .setColor('#2B2D31')
                     .setFooter({ text: 'Status: Pending' })
                     .setTimestamp();
-                await message.author.send({ embeds: [dmEmbed] }).catch(() => {});
+                await message.author.send({ embeds: [dmEmbed] }).catch(() => { });
                 return;
             }
 
@@ -792,7 +1134,33 @@ const createClient = (token) => {
 
         client.on('interactionCreate', async (interaction) => {
             const interactionId = interaction.customId || (interaction.isChatInputCommand() ? interaction.commandName : (interaction.isUserContextMenuCommand() ? interaction.commandName : 'N/A'));
-            console.log(`>>> Interaction Received: ${interaction.type} | ID: ${interactionId} | User: ${interaction.user.tag}`);
+            console.log(`> Interaction Received: ${interaction.type} | ID: ${interactionId} | User: ${interaction.user.tag}`);
+
+            const sendBalanceDM = async (targetUserId, staffUser, itemStr, oldBal, newBal, itemEmoji) => {
+                try {
+                    const diff = newBal - oldBal;
+                    if (diff === 0) return;
+                    const diffAbs = Math.abs(diff);
+                    const actionEmoji = diff > 0 ? '<:fplus:1525905315676160180>' : '<:fminus:1525987679924388001>';
+                    const user = await interaction.client.users.fetch(targetUserId);
+                    if (!user) return;
+                    const embed = new EmbedBuilder()
+                        .setDescription([
+                            `> **Information**`,
+                            `> 🔨 | Staff: ${staffUser} (${staffUser.username})`,
+                            `> 🎯 | Target: ${user} (${user.username})`,
+                            `> 🔹 | Item: ${itemStr}`,
+                            `> 🔍 | Amount: ${actionEmoji} ${diffAbs}`,
+                            `> `,
+                            `> **Updated Balance**`,
+                            `> ${itemEmoji} | ${itemStr} - ${oldBal} ➔ ${newBal}`
+                        ].join('\n'))
+                        .setColor('#2B2D31');
+                    await user.send({ embeds: [embed] }).catch(() => { });
+                } catch (err) {
+                    console.error('Failed to send balance DM:', err);
+                }
+            };
 
             if (interaction.isUserContextMenuCommand()) {
                 if (interaction.user.id !== '518679063062118402' && !interaction.member.roles.cache.has(botData.caseSystem.staffRoleId)) {
@@ -802,7 +1170,7 @@ const createClient = (token) => {
                 if (interaction.commandName === 'Inventory Manager') {
                     const targetUser = interaction.targetUser;
                     const inv = getInventory(targetUser.id);
-                    
+
                     const embed = new EmbedBuilder()
                         .setAuthor({ name: `${targetUser.username}'s Inventory`, iconURL: targetUser.displayAvatarURL() })
                         .setDescription([
@@ -819,7 +1187,7 @@ const createClient = (token) => {
                             '',
                             `<:classicase:1505769014813786234> \u200B | \u200B Classic: **${inv.cases.classic}**`,
                             `<:diamondcase:1505769092072734830> \u200B | \u200B Diamond: **${inv.cases.golden}**`,
-                            `<:femerald:1507462059325915188> \u200B | \u200B Emerald: **${(inv.cases.emerald || 0)}**`
+                            `<:femeraldcase:1525845628586954793> \u200B | \u200B Emerald: **${(inv.cases.emerald || 0)}**`
                         ].join('\n'))
                         .setColor('#1a1a1a')
                         .setThumbnail(targetUser.displayAvatarURL())
@@ -859,25 +1227,25 @@ const createClient = (token) => {
 
                 if (interaction.commandName === 'Give/Take Cases') {
                     const targetUser = interaction.targetUser;
-                    
+
                     const modal = new ModalBuilder()
                         .setCustomId(`givetake_cases_${targetUser.id}`)
                         .setTitle(`Manage Cases: ${targetUser.username}`);
-                        
+
                     const actionInput = new TextInputBuilder()
                         .setCustomId('action_type')
                         .setLabel('Action (give or take)')
                         .setStyle(TextInputStyle.Short)
                         .setPlaceholder('give')
                         .setRequired(true);
-                        
+
                     const caseInput = new TextInputBuilder()
                         .setCustomId('case_type')
                         .setLabel('Case Type (classic/diamond/emerald)')
                         .setStyle(TextInputStyle.Short)
                         .setPlaceholder('diamond')
                         .setRequired(true);
-                        
+
                     const amountInput = new TextInputBuilder()
                         .setCustomId('amount')
                         .setLabel('Amount')
@@ -956,6 +1324,414 @@ const createClient = (token) => {
 
                     await interaction.reply({ embeds: [embed] });
                     return;
+                }
+
+                if (interaction.commandName === 'blackjack') {
+                    if (interaction.channelId !== '1525836717876187197') {
+                        return interaction.reply({ content: 'You can only play blackjack in <#1525836717876187197>!', ephemeral: true });
+                    }
+
+                    if (activeBlackjackGames.has(interaction.user.id)) {
+                        return interaction.reply({ content: 'You already have an active Blackjack game! Please finish it by clicking Hit or Stand on your previous message.', ephemeral: true });
+                    }
+
+                    const bet = interaction.options.getInteger('bet');
+
+                    if (bet < 10000) {
+                        return interaction.reply({ content: 'The minimum bet is **$10,000**.', ephemeral: true });
+                    }
+
+                    const inv = getInventory(interaction.user.id);
+
+                    if (inv.cash < bet) {
+                        const errEmbed = new EmbedBuilder()
+                            .setDescription(`> <:fclose:1503526660014604370> *You don't have enough cash to play Blackjack. You only have **$${inv.cash.toLocaleString()}***\n*Please contact staff to top up your balance.*`)
+                            .setColor('#F04747');
+                        return interaction.reply({ embeds: [errEmbed], ephemeral: true });
+                    }
+
+                    // Deduct bet
+                    inv.cash -= bet;
+                    if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                    inv.stats.blackjack.gambled += bet;
+                    inv.stats.blackjack.played += 1;
+                    saveData();
+
+                    let deck = createDeck();
+                    let playerHand = [deck.pop(), deck.pop()];
+                    let dealerHand = [deck.pop(), deck.pop()];
+
+                    let playerVal = calculateHand(playerHand);
+
+                    // Check for immediate player blackjack
+                    if (playerVal === 21) {
+                        const winAmount = Math.floor(bet * 2.5);
+                        inv.cash += winAmount;
+                        if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                        inv.stats.blackjack.won += winAmount;
+                        saveData();
+
+                        const embed = new EmbedBuilder()
+                            .setAuthor({ name: `${interaction.user.username}'s Blackjack Game`, iconURL: interaction.user.displayAvatarURL() })
+                            .setDescription([
+                                `**Dealer's Hand:**`,
+                                `> ${formatHand(dealerHand, false)} (Value: ${calculateHand(dealerHand)})`,
+                                ``,
+                                `**Your Hand:**`,
+                                `> ${formatHand(playerHand, false)} (Value: ${playerVal})`,
+                                ``,
+                                `> <a:Fgiveaway:1503549273349034065> | You won the blackjack game`,
+                                `> <:fmoney:1525896126849482752> | Winning Amount: **$${winAmount.toLocaleString()}**`
+                            ].join('\n'))
+                            .setColor('#43B581');
+                        await interaction.reply({ embeds: [embed] });
+                        const replyMsg = await interaction.fetchReply();
+                        await replyMsg.react('1517510428022935764');
+                        await replyMsg.react('1503549273349034065');
+                        return;
+                    }
+
+                    // Store game state
+                    activeBlackjackGames.set(interaction.user.id, {
+                        bet: bet,
+                        playerHand: playerHand,
+                        dealerHand: dealerHand,
+                        deck: deck
+                    });
+
+                    const embed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Blackjack Game`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `**Dealer's Hand:**`,
+                            `> ${formatHand(dealerHand, true)}`,
+                            ``,
+                            `**Your Hand:**`,
+                            `> ${formatHand(playerHand, false)} (Value: ${playerVal})`,
+                            ``,
+                            `> <:fmoney:1525896126849482752> | *Bet:* **$${bet.toLocaleString()}**`
+                        ].join('\n'))
+                        .setColor('#2B2D31');
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('bj_hit').setLabel('Hit').setStyle(ButtonStyle.Success),
+                        new ButtonBuilder().setCustomId('bj_stand').setLabel('Stand').setStyle(ButtonStyle.Danger),
+                        new ButtonBuilder().setCustomId('bj_double').setLabel('Double Down').setStyle(ButtonStyle.Primary)
+                    );
+
+                    await interaction.reply({ embeds: [embed], components: [row] });
+                    return;
+                }
+
+                if (interaction.commandName === 'crash') {
+                    if (interaction.channelId !== '1525836717876187197') {
+                        return interaction.reply({ content: 'You can only play crash in <#1525836717876187197>!', ephemeral: true });
+                    }
+
+                    if (activeCrashGames.has(interaction.user.id)) {
+                        return interaction.reply({ content: 'You already have an active Crash game!', ephemeral: true });
+                    }
+
+                    const bet = interaction.options.getInteger('bet');
+
+                    if (bet < 10000) {
+                        return interaction.reply({ content: 'The minimum bet is **$10,000**.', ephemeral: true });
+                    }
+
+                    const inv = getInventory(interaction.user.id);
+
+                    if (inv.cash < bet) {
+                        const errEmbed = new EmbedBuilder()
+                            .setDescription(`> <:fclose:1503526660014604370> *You don't have enough cash to play Crash. You only have **$${inv.cash.toLocaleString()}***\n*Please contact staff to top up your balance.*`)
+                            .setColor('#F04747');
+                        return interaction.reply({ embeds: [errEmbed], ephemeral: true });
+                    }
+
+                    // Deduct bet
+                    inv.cash -= bet;
+                    if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                    inv.stats.crash.gambled += bet;
+                    inv.stats.crash.played += 1;
+                    saveData();
+
+                    // Generate crash point (1% house edge roughly, 5% instant crash at 1.0x)
+                    const e = 100;
+                    const h = Math.random() * 100;
+                    let crashPoint = 1.00;
+                    if (h >= 5) {
+                        crashPoint = Math.floor((100 / (100 - h)) * 95) / 100;
+                    }
+                    if (crashPoint < 1.0) crashPoint = 1.0;
+
+                    const embed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Crash Game`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `> <:dot:1502761998599979130> | **Multiplier:** 1.00x`,
+                            `> <:fmoney:1525896126849482752> | *Bet:* **$${bet.toLocaleString()}**`
+                        ].join('\n'))
+                        .setColor('#FAA61A');
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('crash_cashout').setLabel('Cash Out').setStyle(ButtonStyle.Success)
+                    );
+
+                    await interaction.reply({ embeds: [embed], components: [row] });
+                    const replyMsg = await interaction.fetchReply();
+
+                    const game = {
+                        bet: bet,
+                        crashPoint: crashPoint,
+                        multiplier: 1.0,
+                        cashedOut: false,
+                        message: replyMsg,
+                        startTime: Date.now()
+                    };
+
+                    const interval = setInterval(async () => {
+                        const currentGame = activeCrashGames.get(interaction.user.id);
+                        if (!currentGame || currentGame.cashedOut) {
+                            clearInterval(interval);
+                            return;
+                        }
+
+                        // Calculate current multiplier based on time elapsed
+                        const elapsed = Date.now() - currentGame.startTime;
+                        // Multiplier grows exponentially over time
+                        currentGame.multiplier = Math.pow(Math.E, 0.00018 * elapsed);
+
+                        if (currentGame.multiplier >= currentGame.crashPoint) {
+                            currentGame.multiplier = currentGame.crashPoint;
+                            clearInterval(interval);
+                            activeCrashGames.delete(interaction.user.id);
+
+                            const loseEmbed = new EmbedBuilder()
+                                .setAuthor({ name: `${interaction.user.username}'s Crash Game`, iconURL: interaction.user.displayAvatarURL() })
+                                .setDescription([
+                                    `> <:fclose:1503526660014604370> | **CRASHED!**`,
+                                    `> <:dot:1502761998599979130> | **Multiplier:** ${currentGame.multiplier.toFixed(2)}x`,
+                                    `> <:fmoney:1525896126849482752> | You lost **$${currentGame.bet.toLocaleString()}**.`
+                                ].join('\n'))
+                                .setColor('#F04747');
+
+                            try {
+                                await interaction.editReply({ embeds: [loseEmbed], components: [] });
+                            } catch (e) { console.error('Crash edit error:', e); }
+                        } else {
+                            const updateEmbed = new EmbedBuilder()
+                                .setAuthor({ name: `${interaction.user.username}'s Crash Game`, iconURL: interaction.user.displayAvatarURL() })
+                                .setDescription([
+                                    `> <:dot:1502761998599979130> | **Multiplier:** ${currentGame.multiplier.toFixed(2)}x`,
+                                    `> <:fmoney:1525896126849482752> | *Bet:* **$${currentGame.bet.toLocaleString()}**`
+                                ].join('\n'))
+                                .setColor('#FAA61A');
+
+                            try {
+                                await interaction.editReply({ embeds: [updateEmbed] });
+                            } catch (e) { console.error('Crash update error:', e); }
+                        }
+                    }, 1500);
+
+                    game.interval = interval;
+                    activeCrashGames.set(interaction.user.id, game);
+                    return;
+                }
+
+                if (interaction.commandName === 'mines') {
+                    if (interaction.channelId !== '1525836717876187197') {
+                        return interaction.reply({ content: 'You can only play mines in <#1525836717876187197>!', ephemeral: true });
+                    }
+
+                    if (activeMinesGames.has(interaction.user.id)) {
+                        return interaction.reply({ content: 'You already have an active Mines game! Please finish it.', ephemeral: true });
+                    }
+
+                    const bet = interaction.options.getInteger('bet');
+                    const bombs = interaction.options.getInteger('bombs') || 3;
+
+                    if (bet < 10000) {
+                        return interaction.reply({ content: 'The minimum bet is **$10,000**.', ephemeral: true });
+                    }
+
+                    const inv = getInventory(interaction.user.id);
+                    if (inv.cash < bet) {
+                        const errEmbed = new EmbedBuilder()
+                            .setDescription(`> <:fclose:1503526660014604370> *You don't have enough cash to play Mines. You only have **$${inv.cash.toLocaleString()}***\n*Please contact staff to top up your balance.*`)
+                            .setColor('#F04747');
+                        return interaction.reply({ embeds: [errEmbed], ephemeral: true });
+                    }
+
+                    // Deduct bet and track stats
+                    inv.cash -= bet;
+                    if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, mines: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                    if (!inv.stats.mines) inv.stats.mines = { gambled: 0, won: 0, played: 0 };
+                    inv.stats.mines.gambled += bet;
+                    inv.stats.mines.played += 1;
+                    saveData();
+
+                    // Generate grid
+                    const grid = Array(20).fill(false);
+                    let placed = 0;
+                    while (placed < bombs) {
+                        const idx = Math.floor(Math.random() * 20);
+                        if (!grid[idx]) {
+                            grid[idx] = true;
+                            placed++;
+                        }
+                    }
+
+                    const game = {
+                        bet,
+                        bombs,
+                        grid,
+                        revealed: Array(20).fill(false),
+                        picks: 0,
+                        multiplier: 1.0,
+                        cashedOut: false
+                    };
+
+                    activeMinesGames.set(interaction.user.id, game);
+
+                    const embed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Mines Game`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `> <:dot:1502761998599979130> | **Mines:** ${bombs}`,
+                            `> <:dot:1502761998599979130> | **Multiplier:** 1.00x  (Next: ${getMinesMultiplier(bombs, 1).toFixed(2)}x)`,
+                            `> <:fmoney:1525896126849482752> | **Bet:** $${bet.toLocaleString()}`
+                        ].join('\n'))
+                        .setColor('#FAA61A');
+
+                    const rows = generateMinesGrid(game);
+                    return interaction.reply({ embeds: [embed], components: rows });
+                }
+
+                if (interaction.commandName === 'setup-update') {
+                    if (!interaction.member.permissions.has('Administrator')) {
+                        return interaction.reply({ content: 'You need Administrator permissions to use this.', ephemeral: true });
+                    }
+
+                    const updateEmbed = new EmbedBuilder()
+                        .setAuthor({ name: 'Bot Updates - Overhaul V2 [Beta-Release]', iconURL: interaction.client.user.displayAvatarURL() })
+                        .setDescription([
+                            `We have just deployed a massive update to the bot's gambling system! You can now risk your hard-earned cash in three brand-new, high-stakes games. All games require a minimum bet of **$10,000**. Do you have what it takes to break the bank?`,
+                            ``,
+                            ``,
+                            `<:fplus:1525905315676160180> **Game #1: Mines** (\`/mines [bet] [bombs]\`)`,
+                            `> <:dot:1502761998599979130> Navigate a 5x5 minefield to multiply your cash!`,
+                            `> <:dot:1502761998599979130> Pick anywhere between 1 to 19 bombs. The more bombs you add, the faster your multiplier skyrockets.`,
+                            `> <:dot:1502761998599979130> Cash out at any time... but hit a bomb, and you lose it all!`,
+                            ``,
+                            ``,
+                            `<:fplus:1525905315676160180> **Game #2: Crash** (\`/crash [bet]\`)`,
+                            `> <:dot:1502761998599979130> Watch the multiplier rapidly climb in real-time.`,
+                            `> <:dot:1502761998599979130> The longer you wait, the more you win... but the chart can CRASH at any second!`,
+                            `> <:dot:1502761998599979130> Can you cash out before it crashes?`,
+                            ``,
+                            ``,
+                            `<:fplus:1525905315676160180> **Game #3: HiLo** (\`/hilo [bet]\`)`,
+                            `> <:dot:1502761998599979130> A classic game of Higher or Lower using a standard deck of cards.`,
+                            `> <:dot:1502761998599979130> We show you a card, and you guess if the next card drawn will be higher or lower.`,
+                            `> <:dot:1502761998599979130> Multipliers scale dynamically based on probability!`,
+                            ``,
+                            ``,
+                            `<:fplus:1525905315676160180> **Casino UI Overhaul & Stats Tracker**`,
+                            `> <:dot:1502761998599979130> We added \`/cstats\` to track your total gambled amount, winnings, and times played across all games.`,
+                            `> <:dot:1502761998599979130> Every casino embed has been completely redesigned with perfectly aligned custom emojis and high-quality thumbnails for a premium betting experience!`
+                        ].join('\n'))
+                        .setColor('#FAA61A');
+
+                    await interaction.channel.send({ embeds: [updateEmbed] });
+                    return interaction.reply({ content: 'Update log sent!', ephemeral: true });
+                }
+
+                if (interaction.commandName === 'hilo') {
+                    if (activeHiloGames.has(interaction.user.id)) {
+                        return interaction.reply({ content: 'You already have an active HiLo game!', ephemeral: true });
+                    }
+
+                    const bet = interaction.options.getInteger('bet');
+                    const inv = getInventory(interaction.user.id);
+
+                    if (inv.cash < bet) {
+                        const errEmbed = new EmbedBuilder()
+                            .setDescription(`> <:fclose:1503526660014604370> *You don't have enough cash to play HiLo. You only have **$${inv.cash.toLocaleString()}***\n*Please contact staff to top up your balance.*`)
+                            .setColor('#F04747');
+                        return interaction.reply({ embeds: [errEmbed], ephemeral: true });
+                    }
+
+                    inv.cash -= bet;
+                    if (!inv.stats.hilo) inv.stats.hilo = { gambled: 0, won: 0, played: 0 };
+                    inv.stats.hilo.gambled += bet;
+                    inv.stats.hilo.played += 1;
+                    saveData();
+
+                    const deck = createDeck();
+                    const startingCard = deck.pop();
+
+                    const game = {
+                        bet,
+                        deck,
+                        currentCard: startingCard,
+                        multiplier: 1.0,
+                        cashedOut: false
+                    };
+
+                    activeHiloGames.set(interaction.user.id, game);
+
+                    const cardValue = getCardValue(startingCard);
+                    const higherMult = getHiloMultiplier(cardValue, 'higher');
+                    const lowerMult = getHiloMultiplier(cardValue, 'lower');
+
+                    const embed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Higher or Lower`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `> <:dot:1502761998599979130> | **Card Drawn:** ${startingCard.rank}${startingCard.suit}`,
+                            `> <:dot:1502761998599979130> | **Current Multiplier:** ${game.multiplier.toFixed(2)}x`,
+                            `> <:fmoney:1525896126849482752> | **Bet:** $${bet.toLocaleString()}`
+                        ].join('\n'))
+                        .setThumbnail(getCardImageUrl(startingCard))
+                        .setColor('#FAA61A');
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('hilo_higher').setLabel(`Higher (${higherMult.toFixed(2)}x)`).setStyle(ButtonStyle.Primary).setDisabled(higherMult === 0),
+                        new ButtonBuilder().setCustomId('hilo_lower').setLabel(`Lower (${lowerMult.toFixed(2)}x)`).setStyle(ButtonStyle.Primary).setDisabled(lowerMult === 0),
+                        new ButtonBuilder().setCustomId('hilo_cashout').setLabel('Cash Out').setStyle(ButtonStyle.Success).setDisabled(true) // Disabled on first draw
+                    );
+
+                    return interaction.reply({ embeds: [embed], components: [row] });
+                }
+
+                if (interaction.commandName === 'cstats') {
+                    const inv = getInventory(interaction.user.id);
+                    const stats = inv.stats || { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+
+                    const embed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Casino Stats`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            '## BlackJack Stats:',
+                            `> <:fmoney:1525896126849482752> | Gambled Amount: **$${stats.blackjack.gambled.toLocaleString()}**`,
+                            `> <:fmoney:1525896126849482752> | Winning Amount: **$${stats.blackjack.won.toLocaleString()}**`,
+                            `> <:dot:1502761998599979130> | Times played: **${stats.blackjack.played}**\n`,
+                            '## Crash Stats:',
+                            `> <:fmoney:1525896126849482752> | Gambled Amount: **$${stats.crash.gambled.toLocaleString()}**`,
+                            `> <:fmoney:1525896126849482752> | Winning Amount: **$${stats.crash.won.toLocaleString()}**`,
+                            `> <:dot:1502761998599979130> | Times Played: **${stats.crash.played}**\n`,
+                            '## Mines Stats:',
+                            `> <:fmoney:1525896126849482752> | Gambled Amount: **$${(stats.mines?.gambled || 0).toLocaleString()}**`,
+                            `> <:fmoney:1525896126849482752> | Winning Amount: **$${(stats.mines?.won || 0).toLocaleString()}**`,
+                            `> <:dot:1502761998599979130> | Times Played: **${(stats.mines?.played || 0)}**\n`,
+                            '## HiLo Stats:',
+                            `> <:fmoney:1525896126849482752> | Gambled Amount: **$${(stats.hilo?.gambled || 0).toLocaleString()}**`,
+                            `> <:fmoney:1525896126849482752> | Winning Amount: **$${(stats.hilo?.won || 0).toLocaleString()}**`,
+                            `> <:dot:1502761998599979130> | Times Played: **${(stats.hilo?.played || 0)}**\n`,
+                            '### Case Stats:',
+                            `> <:dot:1502761998599979130> | Total Cases Opened: **${stats.casesOpened.total}**`,
+                            `> <:diamondcase:1505769092072734830> | Diamond: **${stats.casesOpened.golden}**`,
+                            `> <:femeraldcase:1525845628586954793> | Emerald: **${stats.casesOpened.emerald}**`,
+                            `> <:classicase:1505769014813786234> | Classic: **${stats.casesOpened.classic}**`
+                        ].join('\n'))
+                        .setColor('#1a1a1a')
+                        .setThumbnail(interaction.user.displayAvatarURL());
+
+                    return interaction.reply({ embeds: [embed] });
                 }
 
                 if (interaction.commandName === 'cmds') {
@@ -1075,7 +1851,7 @@ const createClient = (token) => {
                             .setColor('#43B581');
 
                         await interaction.reply({ embeds: [embed] });
-                        setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
+                        setTimeout(() => interaction.deleteReply().catch(() => { }), 5000);
                     } catch (err) {
                         console.error('Clear command error:', err);
                         await interaction.reply({ content: 'Failed to delete messages. They might be older than 14 days.', ephemeral: true });
@@ -1144,19 +1920,25 @@ const createClient = (token) => {
 
                     const specificStaff = ['1503148052209209414', '1456634173321384007'].map(id => `<@&${id}>`).join(' ');
                     const embed = new EmbedBuilder()
-                        .setTitle('⚖️ Server Rules & Regulations')
                         .setDescription([
-                            '*Welcome! Please follow these rules:*',
-                            '',
-                            '**🎮 SA-MP Rules:**',
-                            '1. No Cheating | 2. No DM | 3. No Abuse | 4. Respect Others',
-                            '',
-                            '**💬 Discord Rules:**',
-                            '5. No Spam | 6. No Advertising | 7. Follow Discord ToS',
-                            '',
-                            `*Staff Team: ${specificStaff}*`
+                            '***Server Rules & Regulations***',
+                            '*Welcome to our community! Please adhere to the following rules:*',
+                            '---',
+                            '***1. SA-MP Server Rules***',
+                            '> *1. No Cheating, Hacking, or Exploiting.*',
+                            '> *2. No DM without a valid roleplay reason.*',
+                            '> *3. Do not abuse bugs or glitches.*',
+                            '> *4. Respect all players and staff members.*',
+                            '---',
+                            '***2. Discord Rules***',
+                            '> *1. No Spamming or flooding the chat.*',
+                            '> *2. No Advertising other servers or services.*',
+                            '> *3. Strictly follow Discord Terms of Service.*',
+                            '> *4. Keep conversations in appropriate channels.*',
+                            '---',
+                            `*Staff Team:* ${specificStaff}`
                         ].join('\n'))
-                        .setColor('#F04747')
+                        .setColor('#2B2D31')
                         .setFooter({ text: 'Nexus', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
 
                     await channel.send({ embeds: [embed] });
@@ -1182,7 +1964,7 @@ const createClient = (token) => {
                             '',
                             `<:classicase:1505769014813786234> \u200B | \u200B Classic: **${inv.cases.classic}**`,
                             `<:diamondcase:1505769092072734830> \u200B | \u200B Diamond: **${inv.cases.golden}**`,
-                            `<:femerald:1507462059325915188> \u200B | \u200B Emerald: **${inv.cases.emerald || 0}**`
+                            `<:femeraldcase:1525845628586954793> \u200B | \u200B Emerald: **${inv.cases.emerald || 0}**`
                         ].join('\n'))
                         .setColor('#1a1a1a')
                         .setThumbnail(interaction.user.displayAvatarURL())
@@ -1191,10 +1973,10 @@ const createClient = (token) => {
                     const row = new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('open_case_classic').setLabel('Open Classic').setStyle(ButtonStyle.Secondary).setEmoji('1505769014813786234').setDisabled(inv.cases.classic <= 0),
                         new ButtonBuilder().setCustomId('open_case_golden').setLabel('Open Diamond').setStyle(ButtonStyle.Primary).setEmoji('1505769092072734830').setDisabled(inv.cases.golden <= 0),
-                        new ButtonBuilder().setCustomId('open_case_emerald').setLabel('Open Emerald').setStyle(ButtonStyle.Success).setEmoji('1504973609830060062').setDisabled((inv.cases.emerald || 0) <= 0)
+                        new ButtonBuilder().setCustomId('open_case_emerald').setLabel('Open Emerald').setStyle(ButtonStyle.Success).setEmoji('1525845628586954793').setDisabled((inv.cases.emerald || 0) <= 0)
                     );
 
-                    await interaction.reply({ embeds: [embed], components: [row] });
+                    await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
                     return;
                 }
 
@@ -1209,7 +1991,7 @@ const createClient = (token) => {
                         .setDescription('*Welcome to the official Case Shop! Here you can purchase various cases using your in-game resources. Once purchased, use `/inventory` to open them.*')
                         .addFields(
                             { name: '**How it works:**', value: '• Select a case below to purchase.\n• Costs are deducted from your `/inventory` balances.\n• Check your inventory to view and open your cases.' },
-                            { name: '**Available Cases:**', value: '<:classicase:1505769014813786234> **Classic** | <:diamondcase:1505769092072734830> **Diamond** | <:femerald:1507462059325915188> **Emerald**' }
+                            { name: '**Available Cases:**', value: '<:classicase:1505769014813786234> **Classic** | <:diamondcase:1505769092072734830> **Diamond** | <:femeraldcase:1525845628586954793> **Emerald**' }
                         )
                         .setColor('#5865F2')
                         .setFooter({ text: 'Nexus', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
@@ -1254,9 +2036,9 @@ const createClient = (token) => {
                         .setThumbnail('https://i.ibb.co/8L8Ct9T9/image-2026-06-20-044215410.png');
 
                     const row = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder().setCustomId('buy_case_classic').setLabel('Buy Classic').setStyle(ButtonStyle.Secondary).setEmoji('1505769014813786234'),
-                        new ButtonBuilder().setCustomId('buy_case_golden').setLabel('Buy Diamond').setStyle(ButtonStyle.Primary).setEmoji('1505769092072734830'),
-                        new ButtonBuilder().setCustomId('buy_case_emerald').setLabel('Buy Emerald').setStyle(ButtonStyle.Success).setEmoji('1504973609830060062')
+                        new ButtonBuilder().setCustomId('open_case_classic').setLabel('Open Classic').setStyle(ButtonStyle.Secondary).setEmoji('1505769014813786234'),
+                        new ButtonBuilder().setCustomId('open_case_golden').setLabel('Open Diamond').setStyle(ButtonStyle.Primary).setEmoji('1505769092072734830'),
+                        new ButtonBuilder().setCustomId('open_case_emerald').setLabel('Open Emerald').setStyle(ButtonStyle.Success).setEmoji('1525845628586954793')
                     );
 
                     await channel.send({ embeds: [infoEmbed, classicEmbed, goldenEmbed, emeraldEmbed], components: [row] });
@@ -1312,9 +2094,9 @@ const createClient = (token) => {
                         const res = await axios.get('https://ls-rcr.com/top/?p=groups', { timeout: 8000 });
                         const match = res.data.match(/var groupstats = (\[.*?\]);/s);
                         if (!match) return interaction.editReply("Could not fetch groups from LS-RCR.");
-                        
+
                         const groups = JSON.parse(match[1]).map(g => g.name);
-                        groups.sort((a,b) => a.localeCompare(b));
+                        groups.sort((a, b) => a.localeCompare(b));
 
                         const row1 = new ActionRowBuilder();
                         const row2 = new ActionRowBuilder();
@@ -1362,7 +2144,63 @@ const createClient = (token) => {
                     }
                 }
 
-                if (['givecases', 'removecases', 'setjcs', 'setdps', 'setcash'].includes(interaction.commandName)) {
+                if (interaction.commandName === 'setup-shop') {
+                    // Send the shop embed to the current channel
+                    const channel = interaction.channel;
+
+                    const embed = new EmbedBuilder()
+                        .setDescription([
+                            '***1. Jailcards***',
+                            '',
+                            '• *Used to skip jail time instantly.*',
+                            '• *Stock: 100*',
+                            '• *Value: $150,000 each*',
+                            '',
+                            '***2. Donation Points***',
+                            '',
+                            '• *Premium currency for VIP perks.*',
+                            '• *Stock: 50*',
+                            '• *Value: $200,000 each*',
+                            '',
+                            '***3. Houses***',
+                            '',
+                            '• *Exclusive properties around San Andreas.*',
+                            '• *Stock: 2 (Vinewood, Richman)*',
+                            '• *Value: Bidding starts at $5,000,000*',
+                            '',
+                            '***4. Duelcards***',
+                            '',
+                            '• *Special cards to challenge players without losing gear.*',
+                            '• *Stock: 200*',
+                            '• *Value: $50,000 each*',
+                            '',
+                            '---',
+                            '',
+                            '🛒 **Actions**',
+                            '',
+                            '---',
+                            '',
+                            '• *Make sure you have the required funds before placing a bid or creating an order.*',
+                            '',
+                            `*Updated: ${new Date().toUTCString()}*`
+                        ].join('\n'))
+                        .setColor('#2B2D31')
+                        .setFooter({ text: 'Nexus', iconURL: interaction.client.user.displayAvatarURL() });
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('shop_create_order').setLabel('Create Order').setStyle(ButtonStyle.Primary).setEmoji('🛒'),
+                        new ButtonBuilder().setCustomId('shop_place_bid').setLabel('Place Bid').setStyle(ButtonStyle.Secondary).setEmoji('⚖️')
+                    );
+
+                    await channel.send({ embeds: [embed], components: [row] });
+                    await interaction.reply({ content: `Shop setup complete!`, ephemeral: true });
+                    return;
+                }
+
+                if (['givecases', 'removecases', 'setjcs', 'setdps', 'setcash', 'givecash'].includes(interaction.commandName)) {
+                    if (interaction.channelId !== '1525839512838869113') {
+                        return interaction.reply({ content: 'This command can only be used in <#1525839512838869113>.', ephemeral: true });
+                    }
                     const staffRoles = botData.caseSystem.staffRoles || ['1503148052209209414', '1456634173321384007'];
                     if (interaction.user.id !== '518679063062118402' && !interaction.member.roles.cache.some(r => staffRoles.includes(r.id))) {
                         return interaction.reply({ content: 'Unauthorized.', ephemeral: true });
@@ -1370,16 +2208,16 @@ const createClient = (token) => {
 
                     const targetUser = interaction.options.getUser('user');
                     const inv = getInventory(targetUser.id);
-                    
+
                     const sendCasinoManagerLog = (action, amountStr, balanceStr) => {
                         const embed = new EmbedBuilder()
-                            .setTitle('Casino Manager Action')
                             .setDescription([
-                                `<:dot:1502761998599979130> **Staff:** ${interaction.user}`,
-                                `<:dot:1502761998599979130> **Action:** ${action}`,
-                                `<:dot:1502761998599979130> **Amount:** ${amountStr}`,
-                                `<:dot:1502761998599979130> **Target:** ${targetUser}`,
-                                `<:dot:1502761998599979130> **Balance:** ${balanceStr}`
+                                `## **Casino Manager Action**`,
+                                `> <:dot:1502761998599979130> **Staff:** ${interaction.user}`,
+                                `> <:dot:1502761998599979130> **Action:** ${action}`,
+                                `> <:dot:1502761998599979130> **Amount:** ${amountStr}`,
+                                `> <:dot:1502761998599979130> **Target:** ${targetUser}`,
+                                `> <:dot:1502761998599979130> **Balance:** ${balanceStr}`
                             ].join('\n'))
                             .setColor('#2B2D31')
                             .setTimestamp();
@@ -1389,43 +2227,53 @@ const createClient = (token) => {
                     const sendReplyEmbed = (actionText, balanceText) => {
                         const embed = new EmbedBuilder()
                             .setDescription([
-                                `**<:fcheck:1503512920250650745> Success**`,
+                                `**Cash Transferred**`,
                                 ``,
-                                `<:dot:1502761998599979130> *${actionText}*`,
-                                `<:dot:1502761998599979130> *Updated balance -> ${balanceText}*`
+                                `> <:dot:1502761998599979130> ${actionText}`,
+                                `> <:dot:1502761998599979130> Updated balance -> ${balanceText}`
                             ].join('\n'))
                             .setColor('#2B2D31');
-                        return interaction.reply({ embeds: [embed], ephemeral: true });
+                        return interaction.reply({ embeds: [embed], ephemeral: false });
                     };
 
                     if (interaction.commandName === 'givecases') {
                         const type = interaction.options.getString('type');
                         const amount = interaction.options.getInteger('amount');
+                        const oldBal = inv.cases[type];
                         inv.cases[type] += amount;
                         saveData();
                         sendCasinoManagerLog('Given', `${amount} ${type} cases`, `${inv.cases[type]} ${type} cases`);
+                        const caseEmoji = type === 'classic' ? '<:classicase:1505769014813786234>' : (type === 'golden' ? '<:diamondcase:1505769092072734830>' : '<:femeraldcase:1525845628586954793>');
+                        sendBalanceDM(targetUser.id, interaction.user, `${type.charAt(0).toUpperCase() + type.slice(1)} Cases`, oldBal, inv.cases[type], caseEmoji);
                         return sendReplyEmbed(`Given ${amount} ${type} cases to ${targetUser}.`, `${type} cases: ${inv.cases[type]}`);
                     }
                     if (interaction.commandName === 'removecases') {
                         const type = interaction.options.getString('type');
                         const amount = interaction.options.getInteger('amount');
+                        const oldBal = inv.cases[type];
                         inv.cases[type] = Math.max(0, inv.cases[type] - amount);
                         saveData();
                         sendCasinoManagerLog('Removed', `${amount} ${type} cases`, `${inv.cases[type]} ${type} cases`);
+                        const caseEmoji = type === 'classic' ? '<:classicase:1505769014813786234>' : (type === 'golden' ? '<:diamondcase:1505769092072734830>' : '<:femeraldcase:1525845628586954793>');
+                        sendBalanceDM(targetUser.id, interaction.user, `${type.charAt(0).toUpperCase() + type.slice(1)} Cases`, oldBal, inv.cases[type], caseEmoji);
                         return sendReplyEmbed(`Removed ${amount} ${type} cases from ${targetUser}.`, `${type} cases: ${inv.cases[type]}`);
                     }
                     if (interaction.commandName === 'setjcs') {
                         const amount = interaction.options.getInteger('amount');
+                        const oldBal = inv.jcs;
                         inv.jcs = amount;
                         saveData();
                         sendCasinoManagerLog('Set', `${amount} Jailcards`, `${inv.jcs} Jailcards`);
+                        sendBalanceDM(targetUser.id, interaction.user, 'Jailcards', oldBal, inv.jcs, '<:fjcard:1504987238088573000>');
                         return sendReplyEmbed(`Set ${targetUser}'s Jailcards to ${inv.jcs}.`, `Jailcards: ${inv.jcs}`);
                     }
                     if (interaction.commandName === 'setdps') {
                         const amount = interaction.options.getInteger('amount');
+                        const oldBal = inv.dps;
                         inv.dps = amount;
                         saveData();
                         sendCasinoManagerLog('Set', `${amount} Donation Points`, `${inv.dps} Donation Points`);
+                        sendBalanceDM(targetUser.id, interaction.user, 'Donation Points', oldBal, inv.dps, '<:flegendary:1505776122779009205>');
                         return sendReplyEmbed(`Set ${targetUser}'s Donation Points to ${inv.dps}.`, `Donation Points: ${inv.dps}`);
                     }
                     if (interaction.commandName === 'setcash') {
@@ -1434,6 +2282,13 @@ const createClient = (token) => {
                         saveData();
                         sendCasinoManagerLog('Set', `$${amount.toLocaleString()} Cash`, `$${inv.cash.toLocaleString()} Cash`);
                         return sendReplyEmbed(`Set ${targetUser}'s Cash to $${inv.cash.toLocaleString()}.`, `Cash: $${inv.cash.toLocaleString()}`);
+                    }
+                    if (interaction.commandName === 'givecash') {
+                        const amount = interaction.options.getInteger('amount');
+                        inv.cash += amount;
+                        saveData();
+                        sendCasinoManagerLog('Given', `$${amount.toLocaleString()} Cash`, `$${inv.cash.toLocaleString()} Cash`);
+                        return sendReplyEmbed(`Given $${amount.toLocaleString()} Cash to ${targetUser}.`, `Cash: $${inv.cash.toLocaleString()}`);
                     }
                 }
 
@@ -1463,10 +2318,10 @@ const createClient = (token) => {
                         const res = await axios.get('https://ls-rcr.com/top/?p=groups', { timeout: 8000 });
                         const match = res.data.match(/var groupdetailsstats = (\[.*?\]);/s);
                         if (!match) return interaction.editReply("Could not fetch groups from LS-RCR.");
-                        
+
                         const details = JSON.parse(match[1]);
                         const members = details.filter(row => row.name === selectedGroup);
-                        
+
                         if (members.length === 0) {
                             return interaction.editReply(`No members found for group **${selectedGroup}**.`);
                         }
@@ -1477,25 +2332,25 @@ const createClient = (token) => {
                         });
                         let chunks = [];
                         let currentChunk = "";
-                        for(const line of lines) {
-                            if(currentChunk.length + line.length + 5 > 4000) {
+                        for (const line of lines) {
+                            if (currentChunk.length + line.length + 5 > 4000) {
                                 chunks.push(currentChunk);
                                 currentChunk = line + "\n";
                             } else {
                                 currentChunk += line + "\n";
                             }
                         }
-                        if(currentChunk) chunks.push(currentChunk.trim());
+                        if (currentChunk) chunks.push(currentChunk.trim());
 
                         let first = true;
-                        for(let i = 0; i < chunks.length; i++) {
+                        for (let i = 0; i < chunks.length; i++) {
                             const embed = new EmbedBuilder()
                                 .setAuthor({ name: `${selectedGroup} - Group Roster`, iconURL: 'https://cdn.discordapp.com/emojis/1502770043354742835.png' })
-                                .setTitle(i === 0 ? `<a:fstats:1502790793352577184> Total Members: ${members.length}` : `Roster Continued (Part ${i+1})`)
+                                .setTitle(i === 0 ? `<a:fstats:1502790793352577184> Total Members: ${members.length}` : `Roster Continued (Part ${i + 1})`)
                                 .setDescription(chunks[i])
                                 .setColor('#2B2D31')
                                 .setFooter({ text: 'Lost Legends Cases | Live Data', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
-                                
+
                             if (first) {
                                 await interaction.editReply({ embeds: [embed] });
                                 first = false;
@@ -1515,24 +2370,24 @@ const createClient = (token) => {
                     try {
                         const axios = require('axios');
                         const cheerio = require('cheerio');
-                        
+
                         const isArmy = interaction.customId === 'army_members_online';
                         const url = isArmy ? 'https://ls-rcr.com/army/' : 'https://ls-rcr.com/swat/';
                         const title = isArmy ? 'Army Members Online' : 'SWAT Members Online';
                         const emojiUrl = isArmy ? 'https://cdn.discordapp.com/emojis/1507361339109281883.png' : 'https://cdn.discordapp.com/emojis/980178869925580832.png';
                         const footerText = isArmy ? 'The Lost Legends | LS-RCR Army' : 'The Lost Legends | LS-RCR SWAT';
                         const embedColor = isArmy ? '#433b3b' : '#32363C';
-                        
+
                         // Fetch roster list
                         const res = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
                         const $ = cheerio.load(res.data);
-                        
+
                         const membersList = [];
                         $('.card').each((i, card) => {
                             const titleEl = $(card).find('.card-title').clone();
                             titleEl.find('span').remove();
                             const rank = titleEl.text().trim();
-                            
+
                             $(card).find('.list-group-item').each((j, item) => {
                                 const name = $(item).text().trim();
                                 if (name && rank) {
@@ -1544,44 +2399,51 @@ const createClient = (token) => {
                                 }
                             });
                         });
-                        
+
                         // Fetch online players
-                        const playersRes = await axios.get('http://sam.markski.ar/api/GetServerPlayers?ip_addr=37.187.77.206:7777', { timeout: 8000 });
-                        const players = playersRes.data || [];
-                        
+                        let players = [];
+                        try {
+                            const playersRes = await axios.get('http://sam.markski.ar/api/GetServerPlayers?ip_addr=37.187.77.206:7777', { timeout: 8000 });
+                            players = playersRes.data || [];
+                        } catch (e) {
+                            console.error('Error fetching players:', e.message);
+                            return interaction.editReply(`❌ *Could not fetch online players right now. Please try again later.*`);
+                        }
+
                         const onlineMembers = [];
                         for (const p of players) {
+                            if (!p || !p.name) continue;
                             const pNameLower = p.name.toLowerCase();
                             const pCore = pNameLower.replace(/\[.*?\]/g, '').replace(/^(lsrcr_|lsrcr\.)/, '');
-                            
-                            const match = membersList.find(a => 
-                                a.originalName.toLowerCase() === pNameLower || 
-                                a.core === pCore || 
+
+                            const match = membersList.find(a =>
+                                a.originalName.toLowerCase() === pNameLower ||
+                                a.core === pCore ||
                                 (a.core.length >= 3 && pNameLower.includes(a.core))
                             );
-                            
+
                             if (match) {
                                 onlineMembers.push({ name: p.name, rank: match.rank });
                             }
                         }
-                        
+
                         if (onlineMembers.length === 0) {
                             return interaction.editReply(`❌ *No ${isArmy ? 'Army' : 'SWAT'} members are currently online.*`);
                         }
-                        
+
                         const embed = new EmbedBuilder()
                             .setAuthor({ name: title, iconURL: emojiUrl })
                             .setDescription(onlineMembers.map(m => `<:dot:1502761998599979130> **${m.name}** - *${m.rank}*`).join('\n'))
                             .setColor(embedColor)
                             .setFooter({ text: footerText, iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() })
                             .setTimestamp();
-                            
+
                         if (isArmy) {
                             embed.setThumbnail('https://i.ibb.co/60YWbFxY/image-2026-05-22-175056696.png');
                         } else {
                             embed.setThumbnail(emojiUrl);
                         }
-                            
+
                         await interaction.editReply({ embeds: [embed] });
                     } catch (err) {
                         console.error(err);
@@ -1603,6 +2465,372 @@ const createClient = (token) => {
                         await interaction.editReply({ content: 'Select a player:', components: [new ActionRowBuilder().addComponents(select)] });
                     } catch (err) { await interaction.editReply('Error fetching players.'); }
                     return;
+                }
+
+                if (interaction.customId === 'crash_cashout') {
+                    const game = activeCrashGames.get(interaction.user.id);
+                    if (!game) {
+                        return interaction.reply({ content: 'Your crash game has already ended or you do not have one!', ephemeral: true });
+                    }
+
+                    if (game.cashedOut) {
+                        return interaction.reply({ content: 'You already cashed out!', ephemeral: true });
+                    }
+
+                    game.cashedOut = true;
+                    clearInterval(game.interval);
+                    activeCrashGames.delete(interaction.user.id);
+
+                    const winAmount = Math.floor(game.bet * game.multiplier);
+                    const inv = getInventory(interaction.user.id);
+                    inv.cash += winAmount;
+                    if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                    inv.stats.crash.won += winAmount;
+                    saveData();
+
+                    const winEmbed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Crash Game`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `> <a:Fgiveaway:1503549273349034065> | You cashed out at **${game.multiplier.toFixed(2)}x**!`,
+                            `> <:fmoney:1525896126849482752> | Winning Amount: **$${winAmount.toLocaleString()}**`
+                        ].join('\n'))
+                        .setColor('#43B581');
+
+                    await interaction.update({ embeds: [winEmbed], components: [] });
+
+                    try {
+                        await interaction.message.react('1517510428022935764');
+                        await interaction.message.react('1503549273349034065');
+                    } catch (e) {
+                        console.error('Error reacting to crash win:', e);
+                    }
+                    return;
+                }
+
+                if (interaction.customId === 'mine_cashout') {
+                    const game = activeMinesGames.get(interaction.user.id);
+                    if (!game || game.cashedOut) {
+                        return interaction.reply({ content: 'You do not have an active Mines game!', ephemeral: true });
+                    }
+
+                    game.cashedOut = true;
+                    activeMinesGames.delete(interaction.user.id);
+
+                    const winAmount = Math.floor(game.bet * game.multiplier);
+                    const inv = getInventory(interaction.user.id);
+                    inv.cash += winAmount;
+                    if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, mines: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                    if (!inv.stats.mines) inv.stats.mines = { gambled: 0, won: 0, played: 0 };
+                    inv.stats.mines.won += winAmount;
+                    saveData();
+
+                    const winEmbed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Mines Game`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `> <a:Fgiveaway:1503549273349034065> | You safely revealed **${game.picks}** tiles!`,
+                            `> <:fmoney:1525896126849482752> | Winning Amount: **$${winAmount.toLocaleString()}**`
+                        ].join('\n'))
+                        .setColor('#43B581');
+
+                    const rows = generateMinesGrid(game, true); // disable grid
+                    await interaction.update({ embeds: [winEmbed], components: rows });
+
+                    try {
+                        await interaction.message.react('1517510428022935764');
+                        await interaction.message.react('1503549273349034065');
+                    } catch (e) {
+                        console.error('Error reacting to mines win:', e);
+                    }
+                    return;
+                }
+
+                if (interaction.customId.startsWith('mine_') && interaction.customId !== 'mine_cashout') {
+                    const game = activeMinesGames.get(interaction.user.id);
+                    if (!game || game.cashedOut) {
+                        return interaction.reply({ content: 'You do not have an active Mines game!', ephemeral: true });
+                    }
+
+                    const idxStr = interaction.customId.split('_')[1];
+                    const idx = parseInt(idxStr, 10);
+
+                    if (game.revealed[idx]) {
+                        return interaction.reply({ content: 'You already revealed this tile!', ephemeral: true });
+                    }
+
+                    game.revealed[idx] = true;
+
+                    if (game.grid[idx]) {
+                        // HIT A BOMB!
+                        activeMinesGames.delete(interaction.user.id);
+
+                        const loseEmbed = new EmbedBuilder()
+                            .setAuthor({ name: `${interaction.user.username}'s Mines Game`, iconURL: interaction.user.displayAvatarURL() })
+                            .setDescription([
+                                `> <:fclose:1503526660014604370> | **BOOM! You hit a mine!**`,
+                                `> <:fmoney:1525896126849482752> | You lost **$${game.bet.toLocaleString()}**.`
+                            ].join('\n'))
+                            .setColor('#F04747');
+
+                        const rows = generateMinesGrid(game, true, idx);
+                        await interaction.update({ embeds: [loseEmbed], components: rows });
+                        return;
+                    }
+
+                    // SAFE PICK!
+                    game.picks += 1;
+                    game.multiplier = getMinesMultiplier(game.bombs, game.picks);
+
+                    const updateEmbed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Mines Game`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `> <:dot:1502761998599979130> | **Mines:** ${game.bombs}`,
+                            `> <:dot:1502761998599979130> | **Multiplier:** ${game.multiplier.toFixed(2)}x  (Next: ${getMinesMultiplier(game.bombs, game.picks + 1).toFixed(2)}x)`,
+                            `> <:fmoney:1525896126849482752> | **Bet:** $${game.bet.toLocaleString()}`
+                        ].join('\n'))
+                        .setColor('#FAA61A');
+
+                    const rows = generateMinesGrid(game);
+                    await interaction.update({ embeds: [updateEmbed], components: rows });
+
+                    // Auto cash out if they cleared all safe tiles
+                    if (game.picks === (20 - game.bombs)) {
+                        activeMinesGames.delete(interaction.user.id);
+
+                        const winAmount = Math.floor(game.bet * game.multiplier);
+                        const inv = getInventory(interaction.user.id);
+                        inv.cash += winAmount;
+                        if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, mines: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                        if (!inv.stats.mines) inv.stats.mines = { gambled: 0, won: 0, played: 0 };
+                        inv.stats.mines.won += winAmount;
+                        saveData();
+
+                        const winEmbed = new EmbedBuilder()
+                            .setAuthor({ name: `${interaction.user.username}'s Mines Game`, iconURL: interaction.user.displayAvatarURL() })
+                            .setDescription([
+                                `> <a:Fgiveaway:1503549273349034065> | You safely revealed all **${game.picks}** tiles!`,
+                                `> <:fmoney:1525896126849482752> | Winning Amount: **$${winAmount.toLocaleString()}**`
+                            ].join('\n'))
+                            .setColor('#43B581');
+
+                        const rowsFinal = generateMinesGrid(game, true);
+                        await interaction.editReply({ embeds: [winEmbed], components: rowsFinal });
+
+                        try {
+                            const replyMsg = await interaction.message.fetch();
+                            await replyMsg.react('1517510428022935764');
+                            await replyMsg.react('1503549273349034065');
+                        } catch (e) {
+                            console.error('Error reacting to mines win:', e);
+                        }
+                    }
+                    return;
+                }
+
+                if (interaction.customId.startsWith('hilo_')) {
+                    const game = activeHiloGames.get(interaction.user.id);
+                    if (!game || game.cashedOut) {
+                        return interaction.reply({ content: 'You do not have an active HiLo game!', ephemeral: true });
+                    }
+
+                    if (interaction.customId === 'hilo_cashout') {
+                        game.cashedOut = true;
+                        activeHiloGames.delete(interaction.user.id);
+
+                        const winAmount = Math.floor(game.bet * game.multiplier);
+                        const inv = getInventory(interaction.user.id);
+                        inv.cash += winAmount;
+                        if (!inv.stats.hilo) inv.stats.hilo = { gambled: 0, won: 0, played: 0 };
+                        inv.stats.hilo.won += winAmount;
+                        saveData();
+
+                        const winEmbed = new EmbedBuilder()
+                            .setAuthor({ name: `${interaction.user.username}'s Higher or Lower`, iconURL: interaction.user.displayAvatarURL() })
+                            .setDescription([
+                                `> <a:Fgiveaway:1503549273349034065> | You cashed out at **${game.multiplier.toFixed(2)}x**!`,
+                                `> <:fmoney:1525896126849482752> | Winning Amount: **$${winAmount.toLocaleString()}**`
+                            ].join('\n'))
+                            .setThumbnail(getCardImageUrl(game.currentCard))
+                            .setColor('#43B581');
+
+                        await interaction.update({ embeds: [winEmbed], components: [] });
+                        try {
+                            await interaction.message.react('1517510428022935764');
+                            await interaction.message.react('1503549273349034065');
+                        } catch (e) {
+                            console.error('Error reacting to hilo win:', e);
+                        }
+                        return;
+                    }
+
+                    const guess = interaction.customId.split('_')[1]; // 'higher' or 'lower'
+                    const oldCardValue = getCardValue(game.currentCard);
+                    const newCard = game.deck.pop();
+                    const newCardValue = getCardValue(newCard);
+
+                    let won = false;
+                    if (guess === 'higher' && newCardValue > oldCardValue) won = true;
+                    if (guess === 'lower' && newCardValue < oldCardValue) won = true;
+
+                    if (!won) {
+                        activeHiloGames.delete(interaction.user.id);
+                        const loseEmbed = new EmbedBuilder()
+                            .setAuthor({ name: `${interaction.user.username}'s Higher or Lower`, iconURL: interaction.user.displayAvatarURL() })
+                            .setDescription([
+                                `> <:fclose:1503526660014604370> | **WRONG! You drew ${newCard.rank}${newCard.suit}**`,
+                                `> <:fmoney:1525896126849482752> | You lost **$${game.bet.toLocaleString()}**.`
+                            ].join('\n'))
+                            .setThumbnail(getCardImageUrl(newCard))
+                            .setColor('#F04747');
+
+                        return interaction.update({ embeds: [loseEmbed], components: [] });
+                    }
+
+                    // They won the round
+                    game.multiplier *= getHiloMultiplier(oldCardValue, guess);
+                    game.currentCard = newCard;
+
+                    const higherMult = getHiloMultiplier(newCardValue, 'higher');
+                    const lowerMult = getHiloMultiplier(newCardValue, 'lower');
+
+                    const updateEmbed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Higher or Lower`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `> <:dot:1502761998599979130> | **Card Drawn:** ${newCard.rank}${newCard.suit}`,
+                            `> <:dot:1502761998599979130> | **Current Multiplier:** ${game.multiplier.toFixed(2)}x`,
+                            `> <:fmoney:1525896126849482752> | **Bet:** $${game.bet.toLocaleString()}`
+                        ].join('\n'))
+                        .setThumbnail(getCardImageUrl(newCard))
+                        .setColor('#FAA61A');
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('hilo_higher').setLabel(`Higher (${higherMult.toFixed(2)}x)`).setStyle(ButtonStyle.Primary).setDisabled(higherMult === 0),
+                        new ButtonBuilder().setCustomId('hilo_lower').setLabel(`Lower (${lowerMult.toFixed(2)}x)`).setStyle(ButtonStyle.Primary).setDisabled(lowerMult === 0),
+                        new ButtonBuilder().setCustomId('hilo_cashout').setLabel('Cash Out').setStyle(ButtonStyle.Success)
+                    );
+
+                    return interaction.update({ embeds: [updateEmbed], components: [row] });
+                }
+
+                if (interaction.customId.startsWith('bj_')) {
+                    const game = activeBlackjackGames.get(interaction.user.id);
+                    if (!game) {
+                        return interaction.reply({ content: 'You do not have an active Blackjack game!', ephemeral: true });
+                    }
+
+                    const inv = getInventory(interaction.user.id);
+
+                    if (interaction.customId === 'bj_double') {
+                        if (inv.cash < game.bet) {
+                            const errEmbed = new EmbedBuilder()
+                                .setDescription(`> <:fclose:1503526660014604370> *You don't have enough cash to double down. You only have **$${inv.cash.toLocaleString()}***\n*Please contact staff to top up your balance.*`)
+                                .setColor('#F04747');
+                            return interaction.reply({ embeds: [errEmbed], ephemeral: true });
+                        }
+                        inv.cash -= game.bet;
+                        if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                        inv.stats.blackjack.gambled += game.bet;
+                        game.bet *= 2;
+                        game.playerHand.push(game.deck.pop());
+                    } else if (interaction.customId === 'bj_hit') {
+                        game.playerHand.push(game.deck.pop());
+                    }
+
+                    let playerVal = calculateHand(game.playerHand);
+
+                    if (playerVal > 21) {
+                        // Bust
+                        activeBlackjackGames.delete(interaction.user.id);
+                        saveData();
+                        const embed = new EmbedBuilder()
+                            .setAuthor({ name: `${interaction.user.username}'s Blackjack Game`, iconURL: interaction.user.displayAvatarURL() })
+                            .setDescription([
+                                `**Dealer's Hand:**`,
+                                `> ${formatHand(game.dealerHand, false)} (Value: ${calculateHand(game.dealerHand)})`,
+                                ``,
+                                `**Your Hand:**`,
+                                `> ${formatHand(game.playerHand, false)} (Value: ${playerVal})`,
+                                ``,
+                                `> <:fclose:1503526660014604370> | **BUST!**\n> <:fmoney:1525896126849482752> | You lost **$${game.bet.toLocaleString()}**.`
+                            ].join('\n'))
+                            .setColor('#F04747');
+                        return interaction.update({ embeds: [embed], components: [] });
+                    }
+
+                    if (interaction.customId === 'bj_stand' || interaction.customId === 'bj_double') {
+                        // Dealer's turn
+                        let dealerVal = calculateHand(game.dealerHand);
+                        while (dealerVal < 17) {
+                            game.dealerHand.push(game.deck.pop());
+                            dealerVal = calculateHand(game.dealerHand);
+                        }
+
+                        let resultText = '';
+                        let color = '';
+
+                        if (dealerVal > 21 || playerVal > dealerVal) {
+                            const winAmount = game.bet * 2;
+                            inv.cash += winAmount;
+                            inv.stats.blackjack.won += winAmount;
+                            resultText = `> <a:Fgiveaway:1503549273349034065> | You won the blackjack game\n> <:fmoney:1525896126849482752> | Winning Amount: **$${winAmount.toLocaleString()}**`;
+                            color = '#43B581';
+                        } else if (dealerVal === playerVal) {
+                            inv.cash += game.bet;
+                            inv.stats.blackjack.won += game.bet;
+                            resultText = `> <:dot:1502761998599979130> | **PUSH!**\n> <:fmoney:1525896126849482752> | Your bet of **$${game.bet.toLocaleString()}** was returned.`;
+                            color = '#FAA61A';
+                        } else {
+                            resultText = `> <:fclose:1503526660014604370> | **YOU LOSE!**\n> <:fmoney:1525896126849482752> | You lost **$${game.bet.toLocaleString()}**.`;
+                            color = '#F04747';
+                        }
+
+                        activeBlackjackGames.delete(interaction.user.id);
+                        saveData();
+                        const embed = new EmbedBuilder()
+                            .setAuthor({ name: `${interaction.user.username}'s Blackjack Game`, iconURL: interaction.user.displayAvatarURL() })
+                            .setDescription([
+                                `**Dealer's Hand:**`,
+                                `> ${formatHand(game.dealerHand, false)} (Value: ${dealerVal})`,
+                                ``,
+                                `**Your Hand:**`,
+                                `> ${formatHand(game.playerHand, false)} (Value: ${playerVal})`,
+                                ``,
+                                resultText
+                            ].join('\n'))
+                            .setColor(color);
+
+                        await interaction.update({ embeds: [embed], components: [] });
+
+                        if (dealerVal > 21 || playerVal > dealerVal) {
+                            try {
+                                await interaction.message.react('1517510428022935764');
+                                await interaction.message.react('1503549273349034065');
+                            } catch (e) {
+                                console.error('Error reacting to bj win:', e);
+                            }
+                        }
+                        return;
+                    }
+
+                    // Continue game (Hit)
+                    const embed = new EmbedBuilder()
+                        .setAuthor({ name: `${interaction.user.username}'s Blackjack Game`, iconURL: interaction.user.displayAvatarURL() })
+                        .setDescription([
+                            `**Dealer's Hand:**`,
+                            `> ${formatHand(game.dealerHand, true)}`,
+                            ``,
+                            `**Your Hand:**`,
+                            `> ${formatHand(game.playerHand, false)} (Value: ${playerVal})`,
+                            ``,
+                            `> <:fmoney:1525896126849482752> | *Bet:* **$${game.bet.toLocaleString()}**`
+                        ].join('\n'))
+                        .setColor('#2B2D31');
+
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('bj_hit').setLabel('Hit').setStyle(ButtonStyle.Success),
+                        new ButtonBuilder().setCustomId('bj_stand').setLabel('Stand').setStyle(ButtonStyle.Danger)
+                    );
+
+                    return interaction.update({ embeds: [embed], components: [row] });
                 }
 
                 if (interaction.customId.startsWith('buy_case_')) {
@@ -1642,17 +2870,20 @@ const createClient = (token) => {
                     // Log Purchase
                     const logEmbed = new EmbedBuilder()
                         .setAuthor({ name: 'Case Purchase Log', iconURL: 'https://cdn.discordapp.com/emojis/1505782769408807014.png' })
-                        .addFields(
-                            { name: 'User', value: `${interaction.user} (\`${interaction.user.id}\`)`, inline: true },
-                            { name: 'Case Type', value: `${config.name}`, inline: true },
-                            { name: 'Transaction ID', value: `\`${transactionId}\``, inline: true },
-                            { name: 'Cost', value: `${config.cost.toLocaleString()} ${config.currency.toUpperCase()}`, inline: true },
-                            { name: 'New Balance', value: `${inv[config.currency].toLocaleString()} ${config.currency.toUpperCase()}`, inline: true }
-                        )
+                        .setDescription([
+                            `> **Information**`,
+                            `> 👤 | **User:** ${interaction.user} (\`${interaction.user.id}\`)`,
+                            `> 🔹 | **Case Type:** ${config.name}`,
+                            `> 🔍 | **Transaction ID:** \`${transactionId}\``,
+                            `> `,
+                            `> **Transaction Details**`,
+                            `> 🏷️ | **Cost:** ${config.cost.toLocaleString()} ${config.currency.toUpperCase()}`,
+                            `> 💳 | **New Balance:** ${inv[config.currency].toLocaleString()} ${config.currency.toUpperCase()}`
+                        ].join('\n'))
                         .setColor('#43B581')
                         .setTimestamp()
                         .setFooter({ text: 'Purchase Audit System', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
-                    
+
                     logAction(interaction.client, botData.caseSystem.logPurchaseChannelId, logEmbed);
                     return;
                 }
@@ -1663,20 +2894,52 @@ const createClient = (token) => {
                     const inv = getInventory(interaction.user.id);
 
                     if (inv.cases[caseType] <= 0) {
-                        const errEmbed = new EmbedBuilder()
-                            .setDescription(`❌ *No **${config.name}s** available in your inventory. Buy some in the shop!*`)
-                            .setColor('#F04747');
-                        return interaction.reply({ embeds: [errEmbed], ephemeral: true });
+                        // Check if they have enough balance to buy instantly
+                        if (inv[config.currency] < config.cost) {
+                            const currencyName = config.currency === 'cash' ? 'cash' : (config.currency === 'jcs' ? 'jailcards' : 'donation points');
+                            const errEmbed = new EmbedBuilder()
+                                .setDescription(`> <:dot:1502761998599979130> **insufficient balance to open ${config.name}! contact staff to top-up your balance.**`)
+                                .setColor('#F04747');
+                            return interaction.reply({ embeds: [errEmbed], ephemeral: true });
+                        }
+
+                        // Deduct money
+                        inv[config.currency] -= config.cost;
+                        saveData();
+
+                        // Log purchase since they bought it instantly
+                        const transactionId = Math.random().toString(36).substring(2, 11).toUpperCase();
+                        const logPurchaseEmbed = new EmbedBuilder()
+                            .setAuthor({ name: 'Case Purchase Log (Instant)', iconURL: 'https://cdn.discordapp.com/emojis/1505782769408807014.png' })
+                            .setDescription([
+                                `> **Information**`,
+                                `> 👤 | **User:** ${interaction.user} (\`${interaction.user.id}\`)`,
+                                `> 🔹 | **Case Type:** ${config.name}`,
+                                `> 🔍 | **Transaction ID:** \`${transactionId}\``,
+                                `> `,
+                                `> **Transaction Details**`,
+                                `> 🏷️ | **Cost:** ${config.cost.toLocaleString()} ${config.currency.toUpperCase()}`,
+                                `> 💳 | **New Balance:** ${inv[config.currency].toLocaleString()} ${config.currency.toUpperCase()}`
+                            ].join('\n'))
+                            .setColor('#43B581')
+                            .setTimestamp()
+                            .setFooter({ text: 'Purchase Audit System', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
+                        logAction(interaction.client, botData.caseSystem.logPurchaseChannelId, logPurchaseEmbed);
+                    } else {
+                        inv.cases[caseType]--;
                     }
 
-                    inv.cases[caseType]--;
+                    if (!inv.stats) inv.stats = { blackjack: { gambled: 0, won: 0, played: 0 }, crash: { gambled: 0, won: 0, played: 0 }, casesOpened: { classic: 0, golden: 0, emerald: 0, total: 0 } };
+                    inv.stats.casesOpened[caseType] = (inv.stats.casesOpened[caseType] || 0) + 1;
+                    inv.stats.casesOpened.total = (inv.stats.casesOpened.total || 0) + 1;
+                    saveData();
 
                     const openingEmbed = new EmbedBuilder()
                         .setAuthor({ name: `Opening ${config.name}...`, iconURL: config.image })
                         .setDescription(`⏳ *Unlocking your case, please wait...*`)
                         .setColor('#FFA500');
 
-                    await interaction.reply({ embeds: [openingEmbed] });
+                    await interaction.reply({ embeds: [openingEmbed], ephemeral: true });
 
                     setTimeout(async () => {
                         const roll = Math.random() * 100;
@@ -1719,7 +2982,7 @@ const createClient = (token) => {
                             .setTimestamp()
                             .setFooter({ text: 'Opening Audit System', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
 
-                        logAction(interaction.client, botData.caseSystem.logOpenChannelId, logEmbed);
+                        logAction(interaction.client, '1504960442005721108', logEmbed);
                     }, 3000);
                     return;
                 }
@@ -1793,7 +3056,7 @@ const createClient = (token) => {
                     const messageId = parts[3];
 
                     const reason = interaction.fields.getTextInputValue('response_text');
-                    
+
                     const channel = interaction.channel;
                     const message = await channel.messages.fetch(messageId).catch(() => null);
                     if (!message) return interaction.reply({ content: 'Suggestion message not found.', ephemeral: true });
@@ -1803,12 +3066,56 @@ const createClient = (token) => {
                         .setColor(action === 'accept' ? '#43B581' : '#F04747')
                         .spliceFields(0, 1, { name: 'Status', value: status })
                         .addFields(
-                            { name: 'Action by', value: `${interaction.user.username}`, inline: true },
                             { name: 'Staff Response', value: `<:dot:1502761998599979130> *${reason}*`, inline: false }
-                        );
+                        )
+                        .setFooter({ text: `${action === 'accept' ? 'Approved' : 'Denied'} by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
 
-                    await message.edit({ embeds: [newEmbed], components: [] });
-                    await interaction.reply({ content: `Suggestion successfully ${action}ed!`, ephemeral: true });
+                    const btnStyle = action === 'accept' ? ButtonStyle.Success : ButtonStyle.Secondary;
+                    const btnLabel = action === 'accept' ? 'Suggestion Accepted' : 'Suggestion Denied';
+                    const btnEmoji = action === 'accept' ? '1503512920250650745' : '1507464614797901904';
+                    const newRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('dummy_disabled').setLabel(btnLabel).setStyle(btnStyle).setEmoji(btnEmoji).setDisabled(true)
+                    );
+
+                    await message.edit({ embeds: [newEmbed], components: [newRow] });
+
+                    const actionPast = action === 'accept' ? 'accepted' : 'denied';
+                    const replyEmbed = new EmbedBuilder()
+                        .setAuthor({ name: 'Success', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' })
+                        .setDescription(`*Suggestion successfully ${actionPast}.*`)
+                        .setColor('#2B2D31');
+                    await interaction.reply({ embeds: [replyEmbed], ephemeral: true });
+
+                    // Update the user's DM
+                    try {
+                        const match = message.embeds[0].description.match(/<@!?(\d+)>/);
+                        if (match) {
+                            const userId = match[1];
+                            const user = await interaction.client.users.fetch(userId).catch(() => null);
+                            if (user) {
+                                const dmChannel = await user.createDM();
+                                const dmMessages = await dmChannel.messages.fetch({ limit: 20 });
+                                const targetDm = dmMessages.find(m => m.embeds[0]?.description?.includes(message.id));
+
+                                const dmEmbed = new EmbedBuilder()
+                                    .setAuthor({ name: action === 'accept' ? 'Suggestion Accepted' : 'Suggestion Denied', iconURL: action === 'accept' ? 'https://cdn.discordapp.com/emojis/1503512920250650745.png' : 'https://cdn.discordapp.com/emojis/1507464614797901904.png' })
+                                    .setDescription(`> <:dot:1502761998599979130> *Your suggestion has been ${actionPast}.*\n<:dot:1502761998599979130> **ID:** [${message.id}](https://discord.com/channels/${message.guildId}/${message.channelId}/${message.id})`)
+                                    .addFields({ name: 'Staff Response', value: `<:dot:1502761998599979130> *${reason}*` })
+                                    .setColor('#2B2D31')
+                                    .setFooter({ text: `${action === 'accept' ? 'Approved' : 'Denied'} by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() })
+                                    .setTimestamp();
+
+                                if (targetDm) {
+                                    await targetDm.edit({ embeds: [dmEmbed] }).catch(() => { });
+                                } else {
+                                    await user.send({ embeds: [dmEmbed] }).catch(() => { });
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to update suggestion DM', e);
+                    }
+
                     return;
                 }
 
@@ -1819,9 +3126,9 @@ const createClient = (token) => {
                     if (interaction.customId === 'cancel_giveaway') {
                         const adminRole = botData.caseSystem.staffRoles[0] || '1456634173321384007';
                         if (interaction.user.id !== '518679063062118402' && !interaction.member.roles.cache.has(adminRole)) {
-                            return interaction.reply({ 
-                                embeds: [new EmbedBuilder().setAuthor({ name: 'System Notification', iconURL: 'https://cdn.discordapp.com/emojis/1507464614797901904.png' }).setDescription('*Only staff can cancel giveaways.*').setColor('#F04747')], 
-                                ephemeral: true 
+                            return interaction.reply({
+                                embeds: [new EmbedBuilder().setAuthor({ name: 'System Notification', iconURL: 'https://cdn.discordapp.com/emojis/1507464614797901904.png' }).setDescription('*Only staff can cancel giveaways.*').setColor('#F04747')],
+                                ephemeral: true
                             });
                         }
 
@@ -1831,36 +3138,36 @@ const createClient = (token) => {
                         const embed = EmbedBuilder.from(interaction.message.embeds[0])
                             .setDescription('*This giveaway has been cancelled.*')
                             .setColor('#F04747');
-                        
+
                         await interaction.message.edit({ embeds: [embed], components: [] });
-                        
-                        return interaction.reply({ 
-                            embeds: [new EmbedBuilder().setAuthor({ name: 'Success', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' }).setDescription('*Giveaway cancelled successfully.*').setColor('#2B2D31')], 
-                            ephemeral: true 
+
+                        return interaction.reply({
+                            embeds: [new EmbedBuilder().setAuthor({ name: 'Success', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' }).setDescription('*Giveaway cancelled successfully.*').setColor('#2B2D31')],
+                            ephemeral: true
                         });
                     }
 
                     if (interaction.customId === 'view_entries') {
                         const msg = await interaction.channel.messages.fetch(interaction.message.id).catch(() => null);
                         if (!msg) {
-                            return interaction.reply({ 
-                                embeds: [new EmbedBuilder().setAuthor({ name: 'Error', iconURL: 'https://cdn.discordapp.com/emojis/1507464614797901904.png' }).setDescription('*Message not found.*').setColor('#F04747')], 
-                                ephemeral: true 
+                            return interaction.reply({
+                                embeds: [new EmbedBuilder().setAuthor({ name: 'Error', iconURL: 'https://cdn.discordapp.com/emojis/1507464614797901904.png' }).setDescription('*Message not found.*').setColor('#F04747')],
+                                ephemeral: true
                             });
                         }
 
                         const reaction = msg.reactions.cache.get('1503549273349034065');
                         let participants = [];
-                        
+
                         if (reaction) {
                             await reaction.users.fetch();
                             participants = reaction.users.cache.filter(u => !u.bot).map(u => u.username);
                         }
-                        
+
                         if (participants.length === 0) {
-                            return interaction.reply({ 
-                                embeds: [new EmbedBuilder().setAuthor({ name: 'Giveaway Entries (0)', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' }).setDescription('*No entries yet!*').setColor('#2B2D31')], 
-                                ephemeral: true 
+                            return interaction.reply({
+                                embeds: [new EmbedBuilder().setAuthor({ name: 'Giveaway Entries (0)', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' }).setDescription('*No entries yet!*').setColor('#2B2D31')],
+                                ephemeral: true
                             });
                         }
 
@@ -1869,7 +3176,7 @@ const createClient = (token) => {
                             .setAuthor({ name: `Giveaway Entries (${participants.length})`, iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' })
                             .setDescription(entriesList)
                             .setColor('#2B2D31');
-                        
+
                         return interaction.reply({ embeds: [listEmbed], ephemeral: true });
                     }
                 }
@@ -1879,13 +3186,13 @@ const createClient = (token) => {
                 const categoryId = '1504994342752882789';
                 const type = interaction.values[0];
                 const label = type === 'support_general' ? 'General Inquiries' : (type === 'support_withdrawals' ? 'Withdrawals' : (type === 'support_giveaway' ? 'Claim giveaway prize' : 'Cases Purchases'));
-                
+
                 await interaction.deferReply({ ephemeral: true });
 
                 try {
                     const ticketId = Math.floor(1000 + Math.random() * 9000);
                     const channelName = `support-${interaction.user.username}-${ticketId}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
-                    
+
                     const channel = await interaction.guild.channels.create({
                         name: channelName,
                         parent: categoryId,
@@ -1954,14 +3261,14 @@ const createClient = (token) => {
                     const rawCaseType = interaction.fields.getTextInputValue('case_type').toLowerCase().trim();
                     const amountStr = interaction.fields.getTextInputValue('amount').trim();
                     const amount = parseInt(amountStr, 10);
-                    
+
                     if (isNaN(amount) || amount <= 0) {
                         return interaction.reply({ embeds: [new EmbedBuilder().setDescription('❌ *Invalid amount.*').setColor('#F04747')], ephemeral: true });
                     }
                     if (action !== 'give' && action !== 'take') {
                         return interaction.reply({ embeds: [new EmbedBuilder().setDescription('❌ *Invalid action. Must be "give" or "take".*').setColor('#F04747')], ephemeral: true });
                     }
-                    
+
                     let caseType = null;
                     if (rawCaseType === 'classic') caseType = 'classic';
                     else if (rawCaseType === 'diamond' || rawCaseType === 'golden') caseType = 'golden';
@@ -1969,8 +3276,9 @@ const createClient = (token) => {
                     else {
                         return interaction.reply({ embeds: [new EmbedBuilder().setDescription('❌ *Invalid case type. Must be "classic", "diamond", or "emerald".*').setColor('#F04747')], ephemeral: true });
                     }
-                    
+
                     const inv = getInventory(targetUserId);
+                    const oldBal = inv.cases[caseType];
                     if (action === 'give') {
                         inv.cases[caseType] += amount;
                     } else {
@@ -1980,7 +3288,10 @@ const createClient = (token) => {
                         inv.cases[caseType] -= amount;
                     }
                     saveData();
-                    
+
+                    const caseEmoji = caseType === 'classic' ? '<:classicase:1505769014813786234>' : (caseType === 'golden' ? '<:diamondcase:1505769092072734830>' : '<:femeraldcase:1525845628586954793>');
+                    sendBalanceDM(targetUserId, interaction.user, `${caseType.charAt(0).toUpperCase() + caseType.slice(1)} Cases`, oldBal, inv.cases[caseType], caseEmoji);
+
                     const caseConfig = CASE_CONFIG[caseType];
                     const embed = new EmbedBuilder()
                         .setAuthor({ name: 'Cases Updated', iconURL: caseConfig.image })
@@ -1990,9 +3301,9 @@ const createClient = (token) => {
                         )
                         .setColor('#43B581')
                         .setFooter({ text: 'The Lost Legends | Admin System', iconURL: (typeof client !== 'undefined' ? client : discordClient).user.displayAvatarURL() });
-                        
+
                     await interaction.reply({ embeds: [embed], ephemeral: true });
-                    
+
                     // Log it
                     const logEmbed = new EmbedBuilder()
                         .setAuthor({ name: 'Admin Action Log', iconURL: 'https://cdn.discordapp.com/emojis/1505782769408807014.png' })
@@ -2008,7 +3319,7 @@ const createClient = (token) => {
                     const text = interaction.fields.getTextInputValue('suggestion_input');
                     const channel = await interaction.client.channels.fetch(botData.suggestionSystem.channelId).catch(() => null);
                     if (!channel) return interaction.reply({ embeds: [new EmbedBuilder().setDescription('❌ *Error.*').setColor('#F04747')], ephemeral: true });
-                    
+
                     const embed = new EmbedBuilder()
                         .setAuthor({ name: 'New Suggestion', iconURL: interaction.user.displayAvatarURL() })
                         .setDescription([
@@ -2028,12 +3339,19 @@ const createClient = (token) => {
                         .setTimestamp();
 
                     const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('accept_suggestion').setLabel('Accept').setStyle(ButtonStyle.Success).setEmoji('1503512920250650745'), new ButtonBuilder().setCustomId('deny_suggestion').setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('1507464614797901904'));
-                    const msg = await channel.send({ content: botData.suggestionSystem.staffRoles.map(id => `<@&${id}>`).join(' '), embeds: [embed], components: [row] });
-                    
+                    const msg = await channel.send({ embeds: [embed], components: [row] });
+
                     await msg.react('1502758861751455945');
                     await msg.react('1502758895561609247');
 
-                    await interaction.reply({ embeds: [new EmbedBuilder().setDescription('✅ *Your suggestion has been submitted successfully!*').setColor('#43B581')], ephemeral: true });
+                    const replyEmbed = new EmbedBuilder()
+                        .setAuthor({ name: 'Suggestion Submitted', iconURL: 'https://cdn.discordapp.com/emojis/1503512920250650745.png' })
+                        .setDescription(`> <:dot:1502761998599979130> *Your suggestion has been submitted*\n<:dot:1502761998599979130> **ID:** [${msg.id}](https://discord.com/channels/${msg.guildId}/${msg.channelId}/${msg.id})`)
+                        .setColor('#2B2D31')
+                        .setFooter({ text: 'Status: Pending' })
+                        .setTimestamp();
+
+                    await interaction.reply({ embeds: [replyEmbed], ephemeral: true });
                     return;
                 }
                 if (interaction.customId === 'complaint_modal') {
@@ -2239,7 +3557,7 @@ const createClient = (token) => {
             if (message.partial) await message.fetch();
             if (message.channelId !== botData.suggestionSystem?.channelId) return;
             if (!message.embeds || message.embeds.length === 0) return;
-            
+
             const embed = EmbedBuilder.from(message.embeds[0]);
             if (!embed.data.description || !embed.data.description.includes('**Votes:**')) return;
 
@@ -2263,7 +3581,7 @@ const createClient = (token) => {
 
             const parts = embed.data.description.split('**Votes:**');
             if (parts.length === 2) {
-                const newDesc = parts[0] + '**Votes:**\n' + 
+                const newDesc = parts[0] + '**Votes:**\n' +
                     `<:dot:1502761998599979130> <:fup:1502758861751455945> **${fupUsers.length}** - ${upText}\n` +
                     `<:dot:1502761998599979130> <:fdown:1502758895561609247> **${fdownUsers.length}** - ${downText}`;
                 embed.setDescription(newDesc);
@@ -2275,7 +3593,7 @@ const createClient = (token) => {
             if (message.partial) await message.fetch();
             if (!message.embeds || message.embeds.length === 0) return;
             const embed = EmbedBuilder.from(message.embeds[0]);
-            
+
             const reaction = message.reactions.cache.get('1503549273349034065');
             let count = 0;
             if (reaction) {
@@ -2293,7 +3611,7 @@ const createClient = (token) => {
                 }
                 if (newDesc !== desc) {
                     embed.setDescription(newDesc);
-                    await message.edit({ embeds: [embed] }).catch(() => {});
+                    await message.edit({ embeds: [embed] }).catch(() => { });
                 }
             }
         }
@@ -2301,7 +3619,7 @@ const createClient = (token) => {
         client.on('messageReactionAdd', async (reaction, user) => {
             if (user.bot) return;
             if (reaction.partial) await reaction.fetch();
-            
+
             // Giveaway Logic
             if (reaction.emoji.id === '1503549273349034065') {
                 const giveaway = botData.giveawaySystem?.giveaways.find(g => g.messageId === reaction.message.id && !g.ended);
@@ -2419,7 +3737,7 @@ const createClient = (token) => {
                                 .setTimestamp();
 
                             await message.edit({ embeds: [endEmbed] });
-                            
+
                             const winEmbed = new EmbedBuilder()
                                 .setTitle('<a:Fgiveaway:1503549273349034065> Congratulations!')
                                 .setDescription([
@@ -2592,12 +3910,12 @@ app.post('/api/send', async (req, res) => {
                     .setTimestamp(e.timestamp ? new Date() : null);
 
                 if (e.url && typeof e.url === 'string' && e.url.trim() !== '') embed.setURL(e.url);
-                
+
                 if (e.author && e.author.name && typeof e.author.name === 'string' && e.author.name.trim() !== '') {
-                    embed.setAuthor({ 
-                        name: e.author.name.trim(), 
-                        iconURL: (e.author.icon_url && typeof e.author.icon_url === 'string' && e.author.icon_url.startsWith('http')) ? e.author.icon_url : null, 
-                        url: (e.author.url && typeof e.author.url === 'string' && e.author.url.startsWith('http')) ? e.author.url : null 
+                    embed.setAuthor({
+                        name: e.author.name.trim(),
+                        iconURL: (e.author.icon_url && typeof e.author.icon_url === 'string' && e.author.icon_url.startsWith('http')) ? e.author.icon_url : null,
+                        url: (e.author.url && typeof e.author.url === 'string' && e.author.url.startsWith('http')) ? e.author.url : null
                     });
                 }
 
@@ -2757,7 +4075,7 @@ async function getStatsFromPage($, realUsername, url) {
             }
         }
     }
-    
+
     if (!avatarUrl) {
         avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(realUsername)}&background=2B2D31&color=fff&size=256`;
     }
